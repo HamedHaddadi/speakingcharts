@@ -18,5 +18,5 @@ app.layout = html.Div([
 			], id = 'all all tabs')
 ], id = 'app layout')
 
-#if __name__ == '__main__':
-	#app.run_server(debug = True, use_reloader = True)
+if __name__ == '__main__':
+	app.run_server(debug = True, use_reloader = True)
