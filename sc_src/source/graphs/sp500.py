@@ -15,7 +15,7 @@ import plotly.express as px
 
 # package components 
 from .. instruments.indices import SP500 
-from .. utils import styles, tools, keys
+from .. utils import tools, keys
 from . import components   
 
 # load assets 
@@ -23,20 +23,30 @@ from . import components
 sp = SP500.load_assets(sub_dir = keys.SP500_SUBDIR)
 sp.load_sector_mean_returns_long(sub_dir = keys.SP500_SUBDIR)
 sp.load_fundamentals(sub_dir = keys.SP500_SUBDIR)
+# loads sp500 and spxew (equal weight sp500) dataframes
+sp.load_index(sub_dir = keys.SP500_SUBDIR)
 
 # define dates and date differences 
 sp_start_date, sp_end_date = sp.date_range[0], sp.date_range[1]
 one_day_ago, one_week_ago, one_month_ago, six_months_ago, last_year_final_date, one_year_ago = tools.compute_time_deltas(end_date = sp_end_date)
 
 
-# ############# Graphs and callbacks ############## #
+# ############# 		Graphs and callbacks		 ############## #
 index_name = 's&p500'
+
+# display date range first 
+sector_date_range_display = components.DateRangeDisplay(index_name = index_name, 
+					index_start_date = sp_start_date, index_end_date = sp_end_date).layout  
+
+# ##########   index vs equal weight index performance  ############ #
+sector_xew_history = components.XEWDisplay(index_name = index_name, 
+	index_start_date = sp_start_date, index_end_date = sp_end_date, index_object = sp).layout
 # ##########   sector return history  ############ #
 sector_return_history = components.SectorReturnHistory(index_name = index_name,
-	 index_start_date=sp_start_date, index_end_date = sp_end_date, index_object = sp).layout 
+	index_start_date=sp_start_date, index_end_date = sp_end_date, index_object = sp).layout 
 # ##########   Individual stock returns  ############ #
 stock_returns = components.StockReturns(index_name = index_name, index_start_date=sp_start_date, 
-		index_end_date = sp_end_date, index_object=sp).layout 
+	index_end_date = sp_end_date, index_object=sp).layout 
 # ##########   Sector market cap pie chart ############ #
 sector_market_cap = components.SectorMarketCap(index_name = index_name, index_object=sp).layout 
 # ######### Methods for generating index fundamentals ######### #
@@ -45,9 +55,11 @@ index_fundamentals = components.IndexFundamentals(index_name = index_name, index
 
 # #############  	   Tabs     	############## #
 sp500_tab = dbc.Tab([
-	sector_return_history, 
-		stock_returns, 
-			sector_market_cap, 
-				index_fundamentals,
+	sector_date_range_display,
+		sector_xew_history, 
+		sector_return_history, 
+			stock_returns, 
+				sector_market_cap, 
+					index_fundamentals,
 ], label = ['SP500'])
 

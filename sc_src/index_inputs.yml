@@ -1,18 +1,12 @@
 # ### define tasks ### #
-# index: sp500, russel3000
-asset: russell3000
+# index: sp500, russell, nasdaq, all 
+asset: all  
 period: 5y 
 interval: 1d
 start_date: null 
 end_date: null
 fundamentals: true 
-# fully within date range for sector_return_long date formats 
-longs_fully_within_date_range: true 
+sub_dir: '-12-31-main'
+cap: 0 
  
-
-
-
-
-
-
-
+ 

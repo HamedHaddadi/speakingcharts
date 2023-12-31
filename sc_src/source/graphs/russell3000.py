@@ -29,6 +29,9 @@ one_day_ago, one_week_ago, one_month_ago, six_months_ago, last_year_final_date, 
 
 # ############# Graphs and callbacks ############## #
 index_name = 'russell3000'
+# display date range first 
+sector_date_range_display = components.DateRangeDisplay(index_name = index_name, 
+					index_start_date = ru_start_date, index_end_date = ru_end_date).layout
 # ##########   sector return history  ############ #
 sector_return_history = components.SectorReturnHistory(index_name = index_name,
 	 index_start_date= ru_start_date, index_end_date = ru_end_date, index_object = ru).layout
@@ -43,10 +46,11 @@ index_fundamentals = components.IndexFundamentals(index_name = index_name, index
 
 # #############  	   Tabs     	############## #
 russell_tab = dbc.Tab([
-	sector_return_history,
-		stock_returns, 
-			sector_market_cap, 
-				index_fundamentals 
+	sector_date_range_display,
+		sector_return_history,
+			stock_returns, 
+				sector_market_cap, 
+					index_fundamentals 
 ], label = ['RUSSELL'])
 
 

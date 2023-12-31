@@ -37,6 +37,15 @@ submit = {'background-color': 'yellow',
                     'margin-top': '20px',
                     'margin-left': '35%'}
 
+submit_dbc = {'background-color': 'yellow',
+					'font-size': '20px', 
+					'font-family': 'Gill Sans',
+                    'color': 'black',
+                    'size': 4,
+					'offset': 4, 
+					'lg': 10}
+
+
 # dropdown styles
 multi_dropdown = {'height': '40%', 
 				'width': '80%', 
@@ -65,6 +74,14 @@ h2_style = {'color': 'black',
 	'fontsize': 15, 'textAlign': 'center', 'font-family': 'Gill Sans'
 }
 
+h2_style_dbc = {'color': 'black',
+ 	'size': 8, 'offset':2, 'lg':10,
+	'fontsize': 15, 'textAlign': 'center', 'font-family': 'Gill Sans'
+}
+
+h3_style = {'color': 'black', 'margin-top': '5%', 'fontsize': 10,
+		 'textAlign': 'center', 'font-family': 'Gill Sans'}
+
 # main text style 
 main_style = {'color': 'blue',
 	'margin-top': '5px',
@@ -73,16 +90,30 @@ main_style = {'color': 'blue',
 	'fontsize': 25, 'textAlign': 'center', 'font-family': 'Gill Sans'
 }
 
-# date picker stle 
+main_style_dbc = {'color': 'blue',
+	'size':8, 'offset': 2, 'lg': 10,
+		'padding-bottom': '2%',
+	'fontsize': 25, 'textAlign': 'center', 'font-family': 'Gill Sans'
+
+}
+
+# date picker style  
 date_picker = {'width': '100%',
 				'left': '5%',
-					'margin-right': '20px',
-						'margin-left': '20%',
+					'margin-right': '25%',
+						'margin-left': '30%',
 					'background-color':'white',
-					 'height': '50px', 
+					 'height': '10%', 
 						 	'font-family': 'Gill Sans', 
 							 	'font-size': '10px',
 							 		'display': 'inline-block'}
+
+# a date picker according to Dash Bootstrap Component formatting 
+date_picker_dbc = {'size': 8, 'offset': 2, 'lg': 10, 
+		 'background-color': 'white', 'font-family': 'Gill Sans',
+		 	 'font-size': '10px'}
+
+
 # checklist styles 
 checklist_label = {'display': 'block', 
 					'left': '10%',

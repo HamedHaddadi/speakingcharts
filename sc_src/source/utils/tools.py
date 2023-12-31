@@ -2,12 +2,17 @@
 # ####### General Purpose Tools ####### #
 from datetime import datetime, date
 from itertools import islice 
-from os import path 
+from os import path, makedirs  
 import plotly.graph_objects as go  
 import pandas as pd 
 from datetime import date,timedelta 
 from dateutil.relativedelta import relativedelta
 
+
+def make_dir(dirname):
+	if dirname is not None and not path.exists(dirname):
+		makedirs(dirname)
+	return dirname 
 
 def blank_figure():
 	fig = go.Figure(go.Scatter(x = [], y = []))
@@ -48,19 +53,19 @@ def adjust_dates(start_date, end_date, default_start = None, default_end = None)
 	return start_date, end_date
 
 def choose_dates(frame, within_dates = None):
-    """
-    screens asset date frame based on a start and end date 
-        start and end are datetime.date objects 
-        if they are strings they will be converted to datetime.date 
-    """
-    start, end = within_dates
-    if start:
-        start = to_date(start)
-        frame = frame[frame.index.date >= start]
-    if end:
-        end = to_date(end)
-        frame = frame[frame.index.date <= end]
-    return frame
+	start, end = within_dates
+	if start:
+		start = to_date(start)
+		frame = frame[frame.index.date >= start]
+	if end:
+		end = to_date(end)
+		frame = frame[frame.index.date <= end]
+	return {True: None,
+			False: frame}[frame.empty] 
+
+# lite version of choose_dates: within_dates is a tuple of [datetime.date, datetime.date]
+choose_dates_lite = lambda frame, within_dates: frame[(frame.index.date >= within_dates[0]) & (frame.index.date <= within_dates[1])]
+
 
 def find_assets_common_times(asset_1 = None, asset_2 = None):
     min_1 = asset_1.index.date.min()
@@ -84,32 +89,12 @@ def compute_time_deltas(end_date = None):
 	return one_day_ago, one_week_ago, one_month_ago, six_months_ago, last_year_final_date, one_year_ago
 
 
-
-
-
-
-
-
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# ### cumulative return calculation 			############### #
+# A similar staticmethod exists in the Asset class  			#
+# The function here can be used by other classes such as index  #
+# ############################################################# #
+def compute_cumulative_return(returns = None, in_percent = False):
+	if in_percent:
+		return ((1 + returns).cumprod() - 1).dropna()*100 
+	else:
+		return ((1 + returns).cumprod() - 1).dropna()

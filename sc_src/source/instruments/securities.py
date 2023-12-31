@@ -117,7 +117,6 @@ class Asset(metaclass =ABCMeta):
         self.last_date_range = [start, end]
         return start, end   
 
-    
     @staticmethod
     def to_datetime(frame):
         if not isinstance(frame.index, datetime.date):
@@ -127,8 +126,7 @@ class Asset(metaclass =ABCMeta):
     # ############################################################### #
     # #### cumulative return & capital gains  #### #
     def cumulative_return(self, within_dates =  None, 
-                 end_point = ' Close', sampling = 'D', in_percent = False,
-                         fully_within_date_range = False):
+                 end_point = ' Close', sampling = 'D', in_percent = False):
         """
         computes cumulative returns within a period
         using (1 + pct_change).cumprod() - 1
@@ -140,30 +138,22 @@ class Asset(metaclass =ABCMeta):
         cm_returns = None
         if within_dates is None:
             within_dates = self.date_range 
-        
-        elif self.is_within_dates(within_dates=within_dates) is not True:
-            return None 
-        
-        if fully_within_date_range is True and self.is_fully_within_date_range(within_dates=within_dates) is False:
-            return None 
-       
+         
         data = tools.choose_dates(self.data, within_dates)
-        asset_return = data[end_point].resample(sampling).last().pct_change().dropna()
-        cm_returns = Asset.compute_cumulative_return(returns = asset_return, in_percent=in_percent)
+        if data is not None:
+            asset_return = data[end_point].resample(sampling).last().pct_change().dropna()
+            cm_returns = Asset.compute_cumulative_return(returns = asset_return, in_percent=in_percent)
         return cm_returns 
     
-        
     def investment_return(self, within_dates =  None, 
                  end_point = 'Close', sampling = 'D', 
-                         fully_within_date_range = False, 
                             initial_investment = 0):
         """
         computes return from an investment using cumulative return 
         Returns: a dictionary of return which may contain capital gain as well in initial_investment is not 0
         """
         cm_returns = self.cumulative_return(within_dates = within_dates, 
-                             end_point= end_point, fully_within_date_range = fully_within_date_range,
-                             sampling = sampling, in_percent = False)
+                            end_point= end_point, sampling = sampling, in_percent = False)
         investment_return = None
         if cm_returns is not None and len(cm_returns.index) > 0:
             investment_return = {self.name + '_investment_return': cm_returns.values[-1]}
