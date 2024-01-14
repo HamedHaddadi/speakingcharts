@@ -2,6 +2,7 @@
 from copy import deepcopy 
 import pandas as pd
 import numpy as np
+import pandas_datareader.data as web 
 import pickle 
 import re 
 from os import path, makedirs  
@@ -43,13 +44,13 @@ class Index:
         """
         self.assets = assets
         self.num_assets = len(self.assets.keys())
+        self.asset_names = [stock.name for stock in self.assets.values()]
         self.sectors = sectors
         self.sector_keys = list(self.sectors.keys())
         self.period_cumulative_returns = None 
         # dictionary of values
         self.capital_gains = {}
         # best performing assets based on cumulative returns 
-        self.best_performing = {key:[] for key in self.sectors.keys()}
         self.date_range = self._set_date_range(date_range = date_range) 
         # long format dataframes
         # monthly sampling 
@@ -59,6 +60,8 @@ class Index:
         self.sector_fundamentals = None 
         self.fundamentals = None
         self._main_save_path = tools.make_dir(main_save_path) 
+        self._risk_free = None 
+        self.daily_risk_free = None 
 
     @property 
     def main_save_path(self):
@@ -68,8 +71,28 @@ class Index:
     def main_save_path(self, new_path):
         if self._main_save_path == None and new_path != '':
             self._main_save_path = new_path
+    
+    @property 
+    def risk_free(self):
+        return self._risk_free
+    
+    # ### different prices ### #
+    # last price 
+    # average price last week 
+    # average price last month
+    # average price last 6 month
+    # average price last year
+        
+    @risk_free.setter 
+    def risk_free(self, new_rf):
+        if self._risk_free is None and new_rf in ['DGS10']:
+            self._risk_free = web.DataReader(new_rf, 'fred', self.date_range[0], self.date_range[1])
+    
+    def set_daily_risk_free(self):
+        if self.risk_free is not None and self.daily_risk_free is None:
+            periods_per_year = round(self.risk_free.resample('A').size().max())
+            self.daily_risk_free = self.risk_free.resample('D').last().div(periods_per_year).div(100).dropna(inplace = False)
 
-    # helper methods
     def sort_assets(self, sort_key = 'marketCap'):
         """
         sorts the assets dictionary based on a fundamental key
@@ -148,7 +171,8 @@ class Index:
             if cm_returns is not None: 
                 cumulative_returns_history[tickr] = cm_returns 
         return cumulative_returns_history
-                    
+
+    # ### return, volatility, sharpe ### #                
     def compute_investment_returns(self, within_dates = None,
                                  end_point = 'Close', sampling = 'D'):
         """
@@ -175,6 +199,52 @@ class Index:
         investment_returns_df = pd.DataFrame.from_dict(investment_returns_dict, orient = 'columns')
         return investment_returns_df 
     
+    # ### compute risk_return dataframe: return, sharpe, volatility ### #
+    def compute_risk_return(self, within_dates = None, end_point = 'Close',
+            sampling = 'D', risk_free = 'DGS10'):
+        """
+        computes a dataframe contaning cumulative return, volatility, sharpe ratio
+        this method is similar to compute_investment_returns above except that
+            it computes two more metrics: volatility and sharpe
+        dataframe contains different prices (latest, average last week, etc) for coloring in graphs
+        """
+        if within_dates is None:
+            within_dates = self.date_range 
+        
+        if risk_free is not None:
+            self.risk_free = risk_free 
+            self.set_daily_risk_free()
+        
+        risk_return_dict = {'Ticker':[], 'Sector':[], 'Name':[],
+                                 'Return':[], 'Volatility': [], 'Sharpe Ratio': [], 'Latest Price': [], 
+                                    'Average Price Last Week':[], 'Average Price Last Month':[], 
+                                        'Average Price Last Six Months':[],
+                                             'Average Price Last One Year':[]}
+
+        for stock in self.assets.values():
+            risk_return_dict['Ticker'].append(stock.symbol)
+            risk_return_dict['Name'].append(stock.name)
+            risk_return_dict['Sector'].append(stock.sector)
+            stock.risk_free = self.daily_risk_free
+            investment_return = stock.investment_return(within_dates = within_dates, 
+                                end_point = end_point, sampling = sampling, initial_investment = 0)
+            volatility = stock.volatility(within_dates = within_dates, end_point = end_point, 
+                                        sampling = sampling)
+            sharpe = stock.sharpe(within_dates = within_dates, end_point = end_point, 
+                                        sampling = sampling)
+            risk_return_dict['Return'].append(list(investment_return.values())[0])
+            risk_return_dict['Volatility'].append(volatility)
+            risk_return_dict['Sharpe Ratio'].append(sharpe)
+            risk_return_dict['Latest Price'].append(stock.price_latest)
+            risk_return_dict['Average Price Last Week'].append(stock.price_avg_last_week)
+            risk_return_dict['Average Price Last Month'].append(stock.price_avg_last_month)
+            risk_return_dict['Average Price Last Six Months'].append(stock.price_avg_last_six_months)
+            risk_return_dict['Average Price Last One Year'].append(stock.price_avg_last_year)
+        
+        risk_return_df = pd.DataFrame.from_dict(risk_return_dict, orient = 'columns')
+        return risk_return_df 
+
+
     def compute_mean_volume(self, within_dates = None, fully_within_date_range = True):
         if within_dates is None:
             within_dates = self.date_range 

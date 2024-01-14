@@ -3,8 +3,9 @@ import dash
 import dash_bootstrap_components as dbc 
 from dash import html 
 from source.graphs.sp500 import sp500_tab
-from source.graphs.russell3000 import russell_tab 
-from source.graphs.nasdaq import nasdaq_tab 
+from source.graphs.russell3000 import russell3000_tab
+from source.graphs.russell2000 import russell2000_tab  
+from source.graphs.nasdaq import nasdaq_tab
 
 
 app = dash.Dash(__name__, external_stylesheets = [dbc.themes.LUX])
@@ -15,7 +16,8 @@ app.layout = html.Div([
 		html.Br(),
 			dbc.Tabs([
 				sp500_tab, 
-					russell_tab, 
+					russell3000_tab,
+						russell2000_tab,  
 						nasdaq_tab
 			], id = 'all all tabs')
 ], id = 'app layout')

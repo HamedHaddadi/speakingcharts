@@ -21,9 +21,9 @@ from . import components
 
 # load assets 
 # load all datasets
-nq = Nasdaq.load_assets(sub_dir = keys.NASDAQ_SUBDIR)
-nq.load_sector_mean_returns_long(sub_dir = keys.NASDAQ_SUBDIR)
-nq.load_fundamentals(sub_dir = keys.NASDAQ_SUBDIR)
+nq = Nasdaq.load_assets()
+nq.load_sector_mean_returns_long()
+nq.load_fundamentals()
 
 # define dates and date differences 
 nq_start_date, nq_end_date = nq.date_range[0], nq.date_range[1]
@@ -40,6 +40,7 @@ sector_return_history = components.SectorReturnHistory(index_name = index_name,
 # ##########   Individual stock returns  ############ #
 stock_returns = components.StockReturns(index_name = index_name, index_start_date=nq_start_date, 
 		index_end_date = nq_end_date, index_object=nq).layout 
+
 # ##########   Sector market cap pie chart ############ #
 sector_market_cap = components.SectorMarketCap(index_name = index_name, index_object=nq).layout 
 # ######### Methods for generating index fundamentals ######### #

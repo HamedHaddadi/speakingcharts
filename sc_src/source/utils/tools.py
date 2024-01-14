@@ -79,15 +79,19 @@ def find_assets_common_times(asset_1 = None, asset_2 = None):
     return asset_1, asset_2 
 
 # #### time difference operations #### #
+get_one_week_ago = lambda end_date: end_date - timedelta(days = 7)
+get_one_month_ago = lambda end_date: end_date - timedelta(weeks = 4)
+get_six_months_ago = lambda end_date: end_date - relativedelta(months = 6)
+get_one_year_ago = lambda end_date: end_date - relativedelta(years = 1)
+
 def compute_time_deltas(end_date = None):
 	one_day_ago = end_date - timedelta(days = 1)
-	one_week_ago = end_date - timedelta(days = 7)
-	one_month_ago = end_date - timedelta(weeks = 4)
-	six_months_ago = end_date - relativedelta(months = 6)
+	one_week_ago = get_one_week_ago(end_date)
+	one_month_ago = get_one_month_ago(end_date)
+	six_months_ago = get_six_months_ago(end_date)
 	last_year_final_date = date(end_date.year - 1, 12, 31)  
-	one_year_ago =  end_date - relativedelta(years = 1)
+	one_year_ago =  get_one_year_ago(end_date)
 	return one_day_ago, one_week_ago, one_month_ago, six_months_ago, last_year_final_date, one_year_ago
-
 
 # ### cumulative return calculation 			############### #
 # A similar staticmethod exists in the Asset class  			#

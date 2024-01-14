@@ -20,16 +20,15 @@ from . import components
 
 # load assets 
 # load all datasets
-sp = SP500.load_assets(sub_dir = keys.SP500_SUBDIR)
-sp.load_sector_mean_returns_long(sub_dir = keys.SP500_SUBDIR)
-sp.load_fundamentals(sub_dir = keys.SP500_SUBDIR)
+sp = SP500.load_assets()
+sp.load_sector_mean_returns_long()
+sp.load_fundamentals()
 # loads sp500 and spxew (equal weight sp500) dataframes
-sp.load_index(sub_dir = keys.SP500_SUBDIR)
+sp.load_index()
 
 # define dates and date differences 
 sp_start_date, sp_end_date = sp.date_range[0], sp.date_range[1]
 one_day_ago, one_week_ago, one_month_ago, six_months_ago, last_year_final_date, one_year_ago = tools.compute_time_deltas(end_date = sp_end_date)
-
 
 # ############# 		Graphs and callbacks		 ############## #
 index_name = 's&p500'
@@ -47,6 +46,11 @@ sector_return_history = components.SectorReturnHistory(index_name = index_name,
 # ##########   Individual stock returns  ############ #
 stock_returns = components.StockReturns(index_name = index_name, index_start_date=sp_start_date, 
 	index_end_date = sp_end_date, index_object=sp).layout 
+
+# ######### Risk Return Scatter Plots ########### #
+stock_risk_return = components.StockRiskReturn(index_name = index_name, index_start_date= sp_start_date, 
+		index_end_date = sp_end_date, index_object = sp).layout 
+
 # ##########   Sector market cap pie chart ############ #
 sector_market_cap = components.SectorMarketCap(index_name = index_name, index_object=sp).layout 
 # ######### Methods for generating index fundamentals ######### #
@@ -57,9 +61,10 @@ index_fundamentals = components.IndexFundamentals(index_name = index_name, index
 sp500_tab = dbc.Tab([
 	sector_date_range_display,
 		sector_xew_history, 
-		sector_return_history, 
-			stock_returns, 
-				sector_market_cap, 
-					index_fundamentals,
+			sector_return_history, 
+				stock_returns, 
+					stock_risk_return,
+						sector_market_cap, 
+							index_fundamentals,
 ], label = ['SP500'])
 

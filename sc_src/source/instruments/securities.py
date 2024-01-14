@@ -31,7 +31,55 @@ class Asset(metaclass =ABCMeta):
         self.sector = sector 
         # final date ranfge used by the model 
         self.last_date_range = None 
-        
+        self.latest_date = self.data.index.date.max()
+        self._risk_free = None 
+
+    # #### Different prices #### #
+    @property 
+    def price_latest(self):
+        return self.data['Close'][-1]
+    
+    @property 
+    def price_avg_last_week(self):
+        last_week = tools.get_one_week_ago(self.latest_date)
+        return self.data[(self.data.index.date >= last_week) & 
+            (self.data.index.date <= self.latest_date)]['Close'].mean()
+    
+    @property
+    def price_avg_last_month(self):
+        last_month = tools.get_one_month_ago(self.latest_date)
+        return self.data[(self.data.index.date >= last_month) &
+                 (self.data.index.date <= self.latest_date)]['Close'].mean()
+
+    @property 
+    def price_avg_last_six_months(self): 
+        last_six = tools.get_six_months_ago(self.latest_date)
+        return self.data[(self.data.index.date >= last_six) &
+             (self.data.index.date <= self.latest_date)]['Close'].mean()
+    
+    @property 
+    def price_avg_last_year(self):
+        last_year = tools.get_one_year_ago(self.latest_date)
+        return self.data[(self.data.index.date >= last_year) &
+            (self.data.index.date <= self.latest_date)]['Close'].mean()
+    
+    @property
+    def risk_free(self):
+        return self._risk_free 
+
+    @risk_free.setter 
+    def risk_free(self, new_risk_free):
+        """
+        Note that risk_free should be converted according to:
+            risk_free.resample(D).last().div(periods_per_year = 262).dropna(inplace = False)
+        """
+        if isinstance(new_risk_free, pd.Series) or isinstance(new_risk_free, pd.DataFrame):
+            self._risk_free = new_risk_free 
+    
+    @property 
+    def date_range(self):
+        return self.data.index.date.min(), self.data.index.date.max()
+                  
     # => Carpets the dataframe for missing dates
     @staticmethod 
     def fill_frame_daily(data, column = None):
@@ -45,11 +93,6 @@ class Asset(metaclass =ABCMeta):
         data.ffill(inplace = True)
         data.dropna(inplace = True)
         return data 
-    
-    # useful descriptors
-    @property 
-    def date_range(self):
-        return self.data.index.date.min(), self.data.index.date.max()
     
     @staticmethod
     def dates(frame):
@@ -162,31 +205,25 @@ class Asset(metaclass =ABCMeta):
         return investment_return   
     
     def volatility(self, within_dates = None, end_point = 'Close', 
-                    sampling = 'D', fully_within_date_range = False, 
-                            num_periods = None):
+                    sampling = 'D'):
         """
-        returns a dataframe; if num_periods is None then a dataframe of one row will be returned
-            its value can be obained using volatility.values 
+        computes annualized volatility within a time period 
         """
-        
+        num_trading_periods = keys.NUM_PERIODS[sampling]
+                
         if within_dates is None:
             within_dates = self.date_range 
-        elif self.is_within_dates(within_dates=within_dates) is not True:
-            return None 
-        if fully_within_date_range is True and self.is_fully_within_date_range(within_dates=within_dates) is False:
-            return None 
-        data = tools.choose_dates(self.data, within_dates) 
-        asset_return = data[end_point].resample(sampling).last().pct_change().dropna()
-        if num_periods is None:
-            num_periods = len(asset_return.index)
         
-        volatility = np.log(asset_return + 1).rolling(num_periods).std().dropna()*np.sqrt(num_periods)
-
-        return volatility
-
+        volatility = None 
+        data = tools.choose_dates(self.data, within_dates) 
+        if data is not None:
+            data = data.resample(sampling).last()
+            returns = np.log(data[end_point]/data[end_point].shift(1))
+            returns.fillna(0, inplace = True)
+            volatility = returns.std()*np.sqrt(num_trading_periods)
+        return volatility 
     
-    def sharpe(self, within_dates = None, end_point = 'Close', sampling = 'D', 
-                    fully_within_date_range = False, risk_free = 'DGS10'):
+    def sharpe(self, within_dates = None, end_point = 'Close', sampling = 'D'):
         """
         sharpe ratio is calculated using:
             sqrt(num periods)*(aritmetic_mean_period_return - risk_free_rate)/(std of period_returns)
@@ -194,22 +231,23 @@ class Asset(metaclass =ABCMeta):
         Note that risk free is divided by 100 to report as percent; then divided by number of periods
             example: mean 0.018 return annually is 0.018/255 daily 
         """
+        num_trading_periods = keys.NUM_PERIODS[sampling]
+
         if within_dates is None:
             within_dates = self.date_range
-        elif self.is_within_dates(within_dates=within_dates) is not True:
-            return None 
-        if fully_within_date_range is True and self.is_fully_within_date_range(within_dates=within_dates) is False:
-            return None
-        data = tools.choose_dates(self.data, within_dates)
-        period_return = data[end_point].resample(sampling).last().pct_change().dropna()
-        num_periods = len(period_return.index)
-        mean_return = period_return.mean()
-        period_std = period_return.std()
-        
-        risk_free = web.DataReader(risk_free, 'fred', within_dates[0], within_dates[1])
-        mean_risk_free = risk_free.resample(sampling).last().dropna().div(num_periods).div(100).squeeze().mean()
 
-        sharpe = np.sqrt(num_periods)*(mean_return - mean_risk_free)/period_std 
+        data = tools.choose_dates(self.data, within_dates)
+        risk_free = tools.choose_dates(self.risk_free, within_dates)
+        sharpe = None 
+   
+        if data is not None and risk_free is not None:
+            sampling_return = data[end_point].resample(sampling).last().pct_change().dropna(inplace = False)
+            mean_returns = (sampling_return.mean() + 1)**(num_trading_periods) - 1
+            std = sampling_return.std()*np.sqrt(num_trading_periods)
+        
+            risk_free = risk_free.resample(sampling).last()
+            mean_risk_free = risk_free.mean().values[0]
+            sharpe = (mean_returns - mean_risk_free)/std 
         return sharpe
     
     # trading volume
@@ -270,8 +308,7 @@ class Stock(Asset):
         super(Stock, self).__init__(*args, **kwargs)
     
     @classmethod 
-    def get_history(cls, symbol, period = 'max', interval = '1d', name = None, 
-                start_date = None, end_date = None, fundamentals = False):
+    def get_history(cls, symbol, period = 'max', interval = '1d', start_date = None, end_date = None, fundamentals = False):
         """
         period: 1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max
         interval: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo

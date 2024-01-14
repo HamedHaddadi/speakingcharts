@@ -169,7 +169,6 @@ class StockReturns:
 		return frame 
 
 	def plot_stock_return(self, n_clicks, start_date, end_date, num_stocks):
-		self.callback_counter = n_clicks 
 		start_date, end_date = tools.adjust_dates(start_date, end_date,
 				default_start = self.index_start_date, default_end=self.index_end_date)	
 		if num_stocks is None:
@@ -207,6 +206,132 @@ class StockReturns:
 		fig.layout.coloraxis.colorbar.tickfont.size = 20				 
 		return fig
 
+# ###### Risk-Return-Sharpe Scatter plots ###### #
+class StockRiskReturn:
+	"""
+	plots scatter plots of cumulative return-volatility colored by sharpe ratio
+	"""
+	base_name = '_risk_return_'
+	def __init__(self, index_name = 's&p500', index_object = None, index_start_date = None, 
+							index_end_date = None):
+		self.index_start_date = index_start_date 
+		self.index_end_date = index_end_date 
+		self.index_object = index_object
+		self.index_object.risk_free = 'DGS10'
+		self.index_object.set_daily_risk_free()
+
+		self.date_picker_id = index_name + self.base_name + 'date_picker'
+		self.dropdown_id = index_name + self.base_name + 'dropdown'
+		self.radio_id = index_name + self.base_name + 'radio'
+		self.graph_id = index_name + self.base_name + 'graph'
+		self.submit_button_id = index_name + self.base_name + 'submit'
+
+		# ways to reduce calculation time 
+		self.callback_start_date = index_start_date 
+		self.callback_end_date = index_end_date 
+		self.risk_return_df = None 
+
+		self.layout = html.Div([
+			html.H2(f'Return - Volatility - Sharpe ratio with 10 year treasury as the risk free asset', style = styles.h2_style),
+			dbc.Row([
+				html.Main("""This graph displays cumulative
+				 			return-volatility and colors show the sharpe ratio 
+							 		using 10 year treasury yield.
+									  You can compare performance of a group of stocks
+									   with respect to the entire universe by choosing 
+									   them from the dropdown menu. Choose an item using the radio button 
+									   	to change color of points""", style = styles.main_style),
+				dbc.Col([
+					dcc.DatePickerRange(id = self.date_picker_id, min_date_allowed = self.index_start_date, 
+					max_date_allowed = self.index_end_date, start_date = self.index_start_date,
+						initial_visible_month = self.index_start_date, end_date = self.index_end_date, style = styles.date_picker)
+						]),
+				dbc.Col([
+					dcc.Dropdown(id = self.dropdown_id, multi = True, searchable = True,
+						placeholder = 'choose stock(s) to compare',
+				 			options = self.index_object.asset_names, style = styles.multi_dropdown)
+						]),	
+				dbc.Col([
+					dcc.RadioItems(id = self.radio_id, options = ['Sharpe Ratio', 'Latest Price', 
+						'Average Price Last Week', 'Average Price Last Month', 'Average Price Last Six Months', 
+							'Average Price Last One Year'], value = 'Latest Price', style = styles.radio_item)
+						]),		
+					]), 
+				dbc.Button('crunch!', id = self.submit_button_id, n_clicks = 0, style = styles.submit),
+					dcc.Loading([
+						dcc.Graph(id = self.graph_id, figure = tools.blank_figure(),
+				 		style = {'width': '90%', 'margin-left': '20px', 'margin-top': '20px'})
+						], id = index_name + self.base_name + 'load_graph', type='cube')
+		], id = index_name + self.base_name + 'div')
+		
+		self.callback = callback(Output(self.graph_id, 'figure'), 
+			Input(self.submit_button_id, 'n_clicks'), 
+				State(self.date_picker_id, 'start_date'),
+					State(self.date_picker_id, 'end_date'), 
+						State(self.dropdown_id, 'value'),
+							State(self.radio_id, 'value'),
+							 prevent_initial_call = True)(self.plot_risk_return_sharpe)
+	
+	def plot_risk_return_sharpe(self, n_clicks, start_date, end_date, stock_names, color_by):
+		
+		if stock_names is None:
+			raise PreventUpdate 
+		
+		start_date, end_date = tools.adjust_dates(start_date, end_date, default_start = self.index_start_date, 
+						default_end = self.index_end_date)
+		
+		if n_clicks == 1:
+			self.callback_start_date = start_date 
+			self.callback_end_date = end_date 
+			self.risk_return_df = self.index_object.compute_risk_return(within_dates = (self.callback_start_date,
+								 self.callback_end_date), risk_free = None)
+		
+		elif n_clicks > 1 and (start_date != self.callback_start_date or end_date != self.callback_end_date):
+			self.callback_start_date = start_date 
+			self.callback_end_date = end_date 
+			self.risk_return_df = self.index_object.compute_risk_return(within_dates = (self.callback_start_date,
+								self.callback_end_date), risk_free = None)
+		
+		select_assets = self.risk_return_df[self.risk_return_df['Name'].isin(stock_names)]
+
+		if color_by != 'Sharpe Ratio':
+			color_min = self.risk_return_df[color_by].min()
+			color_max = self.risk_return_df[color_by].quantile(0.8).mean()
+			marker_face_color = 'Yellow'
+			marker_line_color = 'Red'
+		else:
+			color_min = self.risk_return_df[color_by].min()
+			color_max = self.risk_return_df[color_by].max()
+			marker_face_color = 'Black'
+			marker_line_color = 'Black'
+
+		fig = go.Figure()
+		fig = px.scatter(self.risk_return_df,  x='Volatility', y = 'Return',
+				 color = color_by, hover_data = ['Name', 'Ticker','Return', 'Volatility', color_by],
+				 	range_color = (color_min, color_max), 
+				 	height = 600, template = 'seaborn', opacity = 0.8)
+		fig.update_traces(marker = {'size': 15})
+		select_asset_fig = px.scatter(select_assets, x = 'Volatility', y = 'Return', color = color_by, 
+					range_color = (color_min, color_max),
+			 hover_data = ['Name', 'Ticker','Return', 'Volatility', color_by])
+		select_asset_fig.update_traces(marker  = {'size': 25, 'symbol': 'x', 'line': {'width': 4, 'color': marker_line_color}})
+		fig.add_trace(select_asset_fig['data'][0])
+		
+		
+		fig.layout.coloraxis.colorscale = 'Turbo'
+		fig.layout.font.family = 'Gill Sans'
+		fig.layout.font.size = 20
+		fig.layout.xaxis.gridcolor = 'black'
+		fig.layout.yaxis.gridcolor = 'black'
+		fig.layout.xaxis.titlefont.family = 'Gill Sans'
+		fig.layout.xaxis.titlefont.size = 30
+		fig.layout.xaxis.tickfont.size = 20
+		fig.layout.yaxis.titlefont.family = 'Gill Sans'
+		fig.layout.yaxis.titlefont.size = 30
+		fig.layout.coloraxis.colorbar.tickfont.size = 20
+
+		return fig 	
+		
 # ###### Sector Market Cap ###### #
 class SectorMarketCap:
 	"""
