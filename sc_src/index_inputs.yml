@@ -6,7 +6,6 @@ interval: 1d
 start_date: null 
 end_date: null
 fundamentals: true 
-sub_dir: '-1-13'
 cap: 0 
  
  

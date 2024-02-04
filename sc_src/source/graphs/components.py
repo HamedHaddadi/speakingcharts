@@ -3,6 +3,7 @@
 # common components used by all indices #
 # ##################################### #
 
+from typing import Iterable
 import dash_bootstrap_components as dbc 
 import pandas as pd 
 import plotly.graph_objects as go 
@@ -26,11 +27,12 @@ SECTOR_COLORS = {'Real Estate': '#FF00FF', 'Energy': '#000000', 'Consumer Discre
 # display the current date to mention data currency 
 class DateRangeDisplay:
 	base_name = '_date_display'
-	def __init__(self, index_name = 's&p500', index_start_date = None, index_end_date = None):
+	def __init__(self, index_name = 's&p500', index_start_date = None, index_end_date = None, 
+				message = 'Data collected from'):
 		index_start_date = index_start_date.strftime('%Y-%m-%d')
 		index_end_date = index_end_date.strftime('%Y-%m-%d')
 		self.layout = html.Div([
-			html.H3(f'Data collected from {index_start_date} to {index_end_date} and updated weekly',
+			html.H3(f'{message} {index_start_date} to {index_end_date} and updated weekly',
 					style = styles.h3_style)
 		], id = index_name + self.base_name + '_div')
 		
@@ -515,7 +517,129 @@ class XEWDisplay:
 		fig.layout.yaxis.title = 'index'
 		fig.layout.font.family = 'Gill Sans'
 		fig.layout.font.size = 20
-		return fig 		 
+		return fig
+
+# ############################################# #
+#  Display Analytics and Performance Components #
+# ############################################# #
+class PerformanceHist:
+	"""
+	generates distributions of all returns and display chosen assets using a vertical
+		line in the graphs 
+	Components: a Bar chart 
+	Dropdown menu: for choosing the stock 
+	RadioItem: for choosing the date range 
+	""" 
+	_dates = {'Last Week': 'LAST_WEEK',
+				'Last Month': 'LAST_MONTH', 
+					'Last Three Months': 'LAST_THREE_MONTHS', 
+						'Last Six Months': 'LAST_SIX_MONTHS', 
+							'Last Year': 'LAST_YEAR'}
+	def __init__(self, hists = None):
+		self.fields = hists._fields 
+		self.histograms = hists
+		self.hist_id = self.fields[0].split('_')[0] 
+		self.base_name = self.hist_id + '_perform_hist'
+		self.dropdown_id = self.base_name + '_dropdown'
+		self.stock_list = list(getattr(self.histograms, self.histograms._fields[0]).Name)
+		self.radio_id = self.base_name + '_radio'
+		self.graph_id = self.base_name + '_graph'
+		self.submit_button_id = self.base_name + '_submit'
+
+		self.layout = html.Div([
+			html.H2('Performance of stocks compared to all stocks', style = styles.h2_style),
+			dbc.Row([
+				html.Main(f""" This graph shows a histogram of {self.hist_id}. You can compare 
+					different stocks with the entire population. The population comprises all stocks 
+						in S & P 500, Russell and Nasdaq indices. Choose you stocks using the dropdown menu.
+							Graphs can be generated for different time ranges. Choose the time range using the
+								radio item. """, style = styles.main_style), 
+				dbc.Col([
+					dcc.Dropdown(id = self.dropdown_id, multi = True, searchable=True,
+						placeholder='choose stock(s) to compare', options = self.stock_list,
+								style = styles.multi_dropdown)
+					]),
+				dbc.Col([
+					dcc.RadioItems(id = self.radio_id, options = list(self._dates.keys()), 
+							value = 'Last Week', style = styles.radio_item)
+					]),
+				]),
+				dbc.Button('crunch!', id = self.submit_button_id, n_clicks = 0, style = styles.submit), 
+					dcc.Loading([
+						dcc.Graph(id = self.graph_id, figure = tools.blank_figure(),
+							style = {'width': '90%', 'margin-left': '20px', 'margin-top': '20px'})
+								], id = self.base_name + 'load_graph', type = 'cube')
+				], id = self.base_name + '_div')
+		
+		self.callback = callback(Output(self.graph_id, 'figure'), 
+			Input(self.submit_button_id, 'n_clicks'), 
+				State(self.radio_id, 'value'), 
+					State(self.dropdown_id, 'value'), prevet_initial_call = True)(self.plot_performance)
+
+	
+	@staticmethod 
+	def _close_value_is(df = None, column = None, value = None):
+		close_df = df.iloc[(df[column] - value).abs().argsort()[0]]
+		return close_df 
+	
+	@staticmethod
+	def generate_arrow_list(annotate_assets = None, hist_assets = None):
+		arrow_list = []
+		for _,asset in annotate_assets.iterrows():
+			close_values = PerformanceHist._close_value_is(df = hist_assets, column = 'Returns',
+					value = asset['Return'])
+			arrow = {'x': close_values['Returns'], 'y': close_values['Number of Stocks'], 
+				'text': asset['Name'], 'showarrow': True, 'arrowhead': 1,'arrowsize': 2, 'arrowwidth': 1,
+					'bordercolor':'#D35400', 'borderwidth':3, 'bgcolor':'#FBFCFC',
+						'font':{'size':15, 'color':'black'}}
+			arrow_list.append(arrow)
+		return arrow_list 
+
+	def plot_performance(self, n_clicks, date_key, stocks):
+		univ_key = self.hist_id + '_' + self._dates[date_key] + '_UNIVERSE'
+		hist_key = self.hist_id + '_' + self._dates[date_key] + '_HIST'
+		hist_df = getattr(self.histograms, hist_key)
+		univ_df = getattr(self.histograms, univ_key)
+
+		fig = px.bar(hist_df, x = 'Returns', y = 'Number of Stocks', labels = {'Returns': 'return, %', 
+					'Number of Stocks': 'number of stocks'}, color = 'Returns', color_continuous_scale='Turbo', 
+							hover_data = ['Returns'], template = 'seaborn')
+		fig.layout.font.family = 'Gill Sans'
+		fig.layout.font.size = 20
+		fig.layout.xaxis.gridcolor = 'black'
+		fig.layout.yaxis.gridcolor = 'black'
+		fig.layout.xaxis.titlefont.family = 'Gill Sans'
+		fig.layout.xaxis.titlefont.size = 30
+		fig.layout.xaxis.tickfont.size = 20
+		fig.layout.yaxis.titlefont.family = 'Gill Sans'
+		fig.layout.yaxis.titlefont.size = 30
+		fig.layout.coloraxis.colorbar.tickfont.size = 20
+		fig.layout.height = 700		
+		if stocks is not None and isinstance(stocks, Iterable):
+			annotate_assets = univ_df[univ_df['Name'].isin(list(stocks))]
+			arrow_list = PerformanceHist.generate_arrow_list(annotate_assets=annotate_assets, hist_assets = hist_df)
+			fig.update_layout(annotations = arrow_list)
+
+		return fig
+		
+
+
+
+
+
+		 
+
+
+
+
+	
+
+
+
+
+
+
+
 
 
 

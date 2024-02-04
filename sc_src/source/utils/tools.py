@@ -81,8 +81,10 @@ def find_assets_common_times(asset_1 = None, asset_2 = None):
 # #### time difference operations #### #
 get_one_week_ago = lambda end_date: end_date - timedelta(days = 7)
 get_one_month_ago = lambda end_date: end_date - timedelta(weeks = 4)
+get_three_months_ago = lambda end_date: end_date - timedelta(days = 90)
 get_six_months_ago = lambda end_date: end_date - relativedelta(months = 6)
 get_one_year_ago = lambda end_date: end_date - relativedelta(years = 1)
+get_two_years_ago = lambda end_date: end_date - relativedelta(years = 2)
 
 def compute_time_deltas(end_date = None):
 	one_day_ago = end_date - timedelta(days = 1)

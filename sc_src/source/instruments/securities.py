@@ -314,12 +314,14 @@ class Stock(Asset):
         interval: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo
         start and end_date: year-month-day 
         """
-        data, fundamentals = Stock.pull_history_and_fundamentals(symbol = symbol,
-                                        period = period, interval = interval, start_date = start_date, end_date = end_date)
-        if data is not None and fundamentals is not None:
-            return cls(symbol = symbol, data = data, sector = fundamentals['sector'],
-                    fundamentals = fundamentals, name = fundamentals['shortName'])
-        else:
+        try:
+            data, fundamentals = Stock.pull_history_and_fundamentals(symbol = symbol,
+                                            period = period, interval = interval, start_date = start_date, end_date = end_date)
+        
+            if data is not None and fundamentals is not None:
+                return cls(symbol = symbol, data = data, sector = fundamentals['sector'],
+                        fundamentals = fundamentals, name = fundamentals['shortName'])
+        except:
             return None 
 
 # ################################# #

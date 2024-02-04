@@ -3,20 +3,10 @@
 # Graph components of Russell2000 #
 # ############################### #
 
-import dash_bootstrap_components as dbc 
-from dash import html, dcc, callback 
-from dash.dependencies import Input, Output, State 
-from dash.exceptions import PreventUpdate 
-
-import pandas as pd 
-from datetime import date,timedelta 
-from dateutil.relativedelta import relativedelta 
-import plotly.graph_objects as go 
-import plotly.express as px 
-
+import dash_bootstrap_components as dbc  
 # package components 
 from .. instruments.indices import Russell2000 
-from .. utils import styles, tools, keys
+from .. utils import tools 
 from . import components   
 
 # load assets 

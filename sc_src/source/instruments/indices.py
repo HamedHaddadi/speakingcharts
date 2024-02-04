@@ -24,13 +24,13 @@ class Index:
     """
     list_of_assets = None
     # list of keys for loading files 
-    assets_subdir = None 
-    assets_filename = None
-    sector_filename = None 
-    sector_long_filename_m = None 
-    sector_long_filename_q = None 
-    sector_fundamentals_filename = None 
-    index_fundamentals_filename = None 
+
+    assets_filename = keys.INDEX_ASSETS
+    sector_filename = keys.INDEX_SECTORS 
+    sector_long_filename_m = keys.INDEX_SECTOR_RETURN_LM 
+    sector_long_filename_q = keys.INDEX_SECTOR_RETURN_LQ 
+    sector_fundamentals_filename = keys.INDEX_SECTOR_FUNDAMENTALS 
+    index_fundamentals_filename = keys.INDEX_FUNDAMENTALS  
 
     fundamentals_keys = ['Market Cap', 'P/E(TTM)', 'Dividend %'] 
     current_time = datetime.now().strftime('%Y-%m-%d-%H-%M')  
@@ -122,25 +122,25 @@ class Index:
         return date_min, date_max 
 
     def save(self):
-        file_name = self.__class__.__name__ + '_index_' + self.current_time + '.pkl'
-        file_name = path.join(self._main_save_path, file_name)
+        """
+        saves the index object as a separate pkl file
+        """
+        file_name = path.join(self.main_save_path, 'index.pkl')
         with open(file_name, 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
 
-    def save_assets(self, period = None, interval = None):
+    def save_assets(self):
         """
         saves assets dictionary and sector_ticker dictionary if
             class is instantiated from these dictionaries
         appliable to Russell2000 index
         """
-        file_name = self.__class__.__name__ + '_for_' + period + '_intervals_' + interval + '_pulled_on_' + self.current_time 
-        asset_name = path.join(self.main_save_path, file_name + '.pkl')
+        asset_name = path.join(self.main_save_path,  'all_assets.pkl')
         with open(asset_name, 'wb') as f:
             for asset in self.assets.values():
                 pickle.dump(asset, f, protocol = pickle.HIGHEST_PROTOCOL)
         
-        sector_filename = path.join(self.main_save_path,
-             self.__class__.__name__ + '_sectors_pulled_on_' + self.current_time + '.dat')
+        sector_filename = path.join(self.main_save_path, 'sectors.dat')
         
         with open(sector_filename, 'w') as s:
             for sector,tickers in self.sectors.items():
@@ -316,8 +316,8 @@ class Index:
                         value_vars = value_vars, ignore_index = True, var_name = 'Sector', 
                                     value_name = 'Return')
         if save_data:
-            file_name = self.__class__.__name__ + '_sector_return_long_' + freq + '_sampling_' +  self.current_time + '.parquet'
-            save_name = path.join(self._main_save_path, file_name)
+            file_name = 'sector_return_long_' + freq + '_sampling.parquet'
+            save_name = path.join(self.main_save_path, file_name)
             sector_mean_return_long.to_parquet(save_name, engine = 'auto', index = False, compression = 'snappy')
         
         return sector_mean_return_long 
@@ -358,8 +358,9 @@ class Index:
         #self.fundamentals.dropna(inplace = True)
         self._compute_sector_fundamentals()
 
-        fund_filename = path.join(self._main_save_path, self.__class__.__name__ + '_fundamentals_pulled_on_' + Index.current_time + '.parquet')
-        sect_filename = path.join(self._main_save_path, self.__class__.__name__ + '_sector_fundamentals_pulled_on_' + Index.current_time + '.parquet')
+        # Note:self.main_save_path aleardy includes the index name 
+        fund_filename = path.join(self.main_save_path, 'fundamentals.parquet')
+        sect_filename = path.join(self.main_save_path, 'sector_fundamentals.parquet')
         self.fundamentals.to_parquet(fund_filename, engine = 'auto', index = False, compression = 'snappy')
         self.sector_fundamentals.to_parquet(sect_filename, engine = 'auto', index = False, compression = 'snappy')    
     # ########################################################### #
@@ -367,20 +368,20 @@ class Index:
     # #### Load sector long dataframes and fundamental data  #### #   
     def load_sector_mean_returns_long(self):
         
-        self.sector_mean_return_long_m = pd.read_parquet(path.join(keys.DATA_PATH, self.assets_subdir,
+        self.sector_mean_return_long_m = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__,
                      self.sector_long_filename_m))
-        self.sector_mean_return_long_q = pd.read_parquet(path.join(keys.DATA_PATH, self.assets_subdir,
+        self.sector_mean_return_long_q = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__,
                      self.sector_long_filename_q))
     
     def load_fundamentals(self):
-        _sector_fundamentals = pd.read_parquet(path.join(keys.DATA_PATH, self.assets_subdir, self.sector_fundamentals_filename))
+        _sector_fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__, self.sector_fundamentals_filename))
         self.sector_fundamentals = _sector_fundamentals[_sector_fundamentals['Sector'].isin(keys.SECTORS)]
-        self.fundamentals = pd.read_parquet(path.join(keys.DATA_PATH, self.assets_subdir, self.index_fundamentals_filename))
+        self.fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__, self.index_fundamentals_filename))
 	# ############################################################## #
 
     @classmethod 
     def pull_assets(cls, period = 'max', interval = '1d',
-                     start_date = None, end_date = None, save_data = True, sub_dir = '', cap = 0):
+                     start_date = None, end_date = None, save_data = True, cap = 0):
         """
         add_index is currently used for sp500 only; but it can be activated for other indices only
             __init__ method of Russell and Nasdaq accept **kwargs to accomodate for 
@@ -400,31 +401,24 @@ class Index:
                 break
             count += 1
             asset = Stock.get_history(symbol, period = period, interval=interval, 
-                                    start_date = start_date, end_date = end_date, 
-                                                fundamentals=True)
+                                        start_date = start_date, end_date = end_date, 
+                                                    fundamentals=True)
             if asset is not None and not asset.data.isnull().all().all():
                 assets[symbol] = asset
                 asset_date_min, asset_date_max = asset.date_range 
                 date_min, date_max = Index._compute_date_range(date_min = date_min, date_max = date_max, 
-                        asset_date_min = asset_date_min, asset_date_max = asset_date_max)
+                            asset_date_min = asset_date_min, asset_date_max = asset_date_max)
                 sector = asset.sector
                 if sector not in sector_tickers.keys():
                     sector_tickers[sector] = []
                 sector_tickers[sector].append(symbol)
         
-        main_save_path = tools.make_dir(path.join(keys.DATA_PATH, cls.__name__.upper() + sub_dir.upper()))    
+        main_save_path = tools.make_dir(path.join(keys.DATA_PATH, cls.__name__.upper()))    
         if save_data is True:
-            if start_date is not None and end_date is not None:
-                file_name = cls.__name__ + '_for_' + start_date + '_and_' + end_date  + '_pulled_on_'
-            else:
-                file_name = cls.__name__ + '_for_' + period + '_intervals_' + interval + '_pulled_on_'
-
-            file_name = file_name + cls.current_time 
-            asset_name = path.join(main_save_path, file_name + '.pkl')
-            with open(asset_name, 'wb') as f:
+            with open(path.join(main_save_path, 'all_assets.pkl'), 'wb') as f:
                 for asset in assets.values():
                     pickle.dump(asset, f, pickle.HIGHEST_PROTOCOL)
-            sector_filename = path.join(main_save_path, cls.__name__ + '_sectors_pulled_on_' + cls.current_time + '.dat')
+            sector_filename = path.join(main_save_path, 'sectors.dat')
             with open(sector_filename, 'w') as s:
                 for sector, tickers in sector_tickers.items():
                     tickers = ','.join(tickers)
@@ -437,8 +431,8 @@ class Index:
         """
         loads all stocks in sp500 from the pickle file of Stock objects
         """
-        assets_file = path.join(keys.DATA_PATH, cls.assets_subdir, cls.assets_filename)
-        sector_file = path.join(keys.DATA_PATH, cls.assets_subdir, cls.sector_filename)
+        assets_file = path.join(keys.LOAD_PATH, cls.__name__.upper(), cls.assets_filename)
+        sector_file = path.join(keys.LOAD_PATH, cls.__name__.upper(), cls.sector_filename)
 
         assets = {}
         with open(assets_file, 'rb') as f:
@@ -463,14 +457,13 @@ class Index:
         """
         loads the index from the serialized index file and returns an object
         """
-        index_file = path.join(keys.DATA_PATH, cls.assets_subdir, cls.index_class_filename)
+        index_file = path.join(keys.LOAD_PATH, cls.__name__.upper(), cls.index_class_filename)
         with open(index_file, 'rb') as f:
             index = pickle.load(f)
             return index  
     # ######################################## #
     # operations for operation between indices #
     # ######################################## #
-
 
     def __iadd__(self, other):
         """
@@ -515,17 +508,6 @@ class SP500(Index):
     """
 
     list_of_assets = market_data.pull_sp500_tickers()
-    assets_subdir = keys.SP500_SUBDIR 
-    assets_filename = keys.SP500_ASSETS
-    sector_filename = keys.SP500_SECTORS 
-    # this is the class Index saved as pickle file (different than sp and spxew index)
-    index_class_filename = keys.SP500_INDEX_CLASS_FILE 
-
-    sector_long_filename_m = keys.SP500_SECTOR_RETURN_LM 
-    sector_long_filename_q = keys.SP500_SECTOR_RETURN_LQ
-    sector_fundamentals_filename = keys.SP500_SECTOR_FUNDAMENTALS 
-    index_fundamentals_filename = keys.SP500_FUNDAMENTALS
-
     # index filenmes 
     x_index_filename = keys.SP500_INDEX_FILENAME 
     ew_index_filename = keys.SPXEW_INDEX_FILENAME
@@ -549,17 +531,15 @@ class SP500(Index):
         self.x_index.dropna(inplace = True)
         self.ew_index.dropna(inplace = True)
         
-        sp_filename = path.join(self._main_save_path ,
-           'sp_index_pulled_on_' + self.current_time + '.csv')
-        spxew_filename = path.join(self._main_save_path,
-           'spxew_index_pulled_on_' + self.current_time + '.csv')
+        sp_filename = path.join(self._main_save_path , 'sp_index.csv')
+        spxew_filename = path.join(self._main_save_path, 'spxew_index.csv')
 
         self.x_index.to_csv(sp_filename, sep = ',', header = True, index = True)
         self.ew_index.to_csv(spxew_filename, sep = ',', header = True, index = True)
 
     def load_index(self):
-        self.x_index = pd.read_csv(path.join(keys.DATA_PATH, self.assets_subdir, self.x_index_filename), header = 0, sep = ',', index_col='Date')
-        self.ew_index = pd.read_csv(path.join(keys.DATA_PATH, self.assets_subdir, self.ew_index_filename), header = 0, sep = ',', index_col = 'Date') 
+        self.x_index = pd.read_csv(path.join(keys.LOAD_PATH, 'SP500', self.x_index_filename), header = 0, sep = ',', index_col='Date')
+        self.ew_index = pd.read_csv(path.join(keys.LOAD_PATH, 'SP500', self.ew_index_filename), header = 0, sep = ',', index_col = 'Date') 
         self.x_index.index = pd.to_datetime(self.x_index.index)
         self.ew_index.index = pd.to_datetime(self.ew_index.index)
 
@@ -591,24 +571,13 @@ class SP500(Index):
 # ###################################### #
 class Russell3000(Index):
 
-    list_of_assets = pd.read_csv(path.join(keys.DATA_PATH, keys.RUSSELL3000_CSV),
+    list_of_assets = pd.read_csv(path.join(keys.MAIN_DATA_PATH, keys.RUSSELL3000_CSV),
              sep = ',', header = 0)['tickers']
-
-    assets_subdir = keys.RUSSELL3000_SUBDIR 
-    assets_filename = keys.RUSSELL3000_ASSETS
-    sector_filename = keys.RUSSELL3000_SECTORS 
-    index_class_filename = keys.RUSSELL3000_INDEX_CLASS_FILE
-
-    sector_long_filename_m = keys.RUSSELL3000_SECTOR_RETURN_LM 
-    sector_long_filename_q = keys.RUSSELL3000_SECTOR_RETURN_LQ
-    sector_fundamentals_filename = keys.RUSSELL3000_SECTOR_FUNDAMENTALS
-    index_fundamentals_filename = keys.RUSSELL3000_FUNDAMENTALS
 
     def __init__(self, assets = {}, sectors = None, date_range = None, main_save_path = None):
          super(Russell3000, self).__init__(assets = assets, sectors = sectors,
             date_range = date_range, main_save_path = main_save_path)
         
-    
     def generate_russell2000_assets(self):
         """
         after generating russell3000, this method sorts assets based on
@@ -631,24 +600,11 @@ class Russell3000(Index):
 # ###################################### #
 # Russel 2000 index                      #
 # ###################################### #
-class Russell2000(Index):
-    
-    assets_subdir = keys.RUSSELL2000_SUBDIR
-    assets_filename = keys.RUSSELL2000_ASSETS 
-    sector_filename = keys.RUSSELL2000_SECTORS
-    index_class_filename = keys.RUSSELL2000_INDEX_CLASS_FILE
-
-    sector_long_filename_m = keys.RUSSELL2000_SECTOR_RETURN_LM 
-    sector_long_filename_q = keys.RUSSELL2000_SECTOR_RETURN_LQ
-    sector_fundamentals_filename = keys.RUSSELL2000_SECTOR_FUNDAMENTALS
-    index_fundamentals_filename = keys.RUSSELL2000_FUNDAMENTALS
-    
+class Russell2000(Index):    
     def __init__(self, assets = {}, sectors = None, date_range = None, main_save_path = None):
         super(Russell2000, self).__init__(assets = assets, sectors = sectors, 
                         date_range = date_range, main_save_path = main_save_path)
     
-
-
 # ###################################### #
 # NASDAQ                                 #
 # to avoid downloading fundamentals      #
@@ -657,18 +613,8 @@ class Russell2000(Index):
 # ###################################### #
 class Nasdaq(Index):
 
-    list_of_assets = pd.read_csv(path.join(keys.DATA_PATH, keys.NASDAQ_CSV),
+    list_of_assets = pd.read_csv(path.join(keys.MAIN_DATA_PATH, keys.NASDAQ_CSV),
              sep = ',', header = 0)['Symbol']
-    
-    assets_subdir = keys.NASDAQ_SUBDIR
-    assets_filename = keys.NASDAQ_ASSETS
-    sector_filename = keys.NASDAQ_SECTORS 
-    index_class_filename = keys.NASDAQ_INDEX_CLASS_FILE
-
-    sector_long_filename_m = keys.NASDAQ_SECTOR_RETURN_LM 
-    sector_long_filename_q = keys.NASDAQ_SECTOR_RETURN_LQ
-    sector_fundamentals_filename = keys.NASDAQ_SECTOR_FUNDAMENTALS
-    index_fundamentals_filename = keys.NASDAQ_FUNDAMENTALS
 
     def __init__(self, assets = {}, sectors = None, date_range = None, main_save_path = None):
         super(Nasdaq, self).__init__(assets = assets, sectors = sectors,
