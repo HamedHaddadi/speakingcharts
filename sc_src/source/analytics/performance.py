@@ -48,12 +48,10 @@ class Performance:
 							tools.get_two_years_ago(self.latest_date)]
 		self.dates = {key:(init_date, self.latest_date) for key,init_date in zip(keys, init_dates)}
 		
-	
 	@property 
 	def sample_size(self):
 		return len(self.universe.assets)
 	
-
 	# #### Compute Methods #### #
 	def compute_investment_return_distribution(self, within_dates = None,
 				 sampling = 'D', bins = 100):
@@ -83,7 +81,6 @@ class Performance:
 			univ_df.to_csv(path.join(self.main_save_path, univ_name), sep = ',', header = True, index = False, float_format = '%.4f')
 			hist_df.to_csv(path.join(self.main_save_path, hist_name), sep = ',', header = True, index = False, float_format = '%.4f')
 				
-
 	@classmethod
 	def load_assets_from_indices(cls):
 		sp_object = SP500.load_assets()
@@ -104,6 +101,5 @@ def load_distributions():
 	for csv_file in listdir(files_path):
 		names.append(csv_file.split('.')[0])
 		values.append(pd.read_csv(path.join(files_path, csv_file), sep = ',', header = 0))
-	
 	Distributions = namedtuple('Distributions', names)
 	return Distributions(*values)

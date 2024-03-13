@@ -14,7 +14,7 @@ from .. utils import market_data, tools, keys
 class Asset(metaclass =ABCMeta):
     """
     Abstract Base Class for all asset classes
-    fundmantals: a dictionary with keys: ['trailingPE', 'forwardPE', 'marketCap', 
+    fundamentals: a dictionary with keys: ['trailingPE', 'forwardPE', 'marketCap', 
                     'sector', 'dividendRate', 'dividendYield']
     """
     _annualize = {'M': 12, 'D': 252, 'W': 52}
@@ -32,12 +32,10 @@ class Asset(metaclass =ABCMeta):
         # final date ranfge used by the model 
         self.last_date_range = None 
         self.latest_date = self.data.index.date.max()
+        self.latest_price = self.data['Close'][-1]
         self._risk_free = None 
 
     # #### Different prices #### #
-    @property 
-    def price_latest(self):
-        return self.data['Close'][-1]
     
     @property 
     def price_avg_last_week(self):
@@ -187,6 +185,17 @@ class Asset(metaclass =ABCMeta):
             asset_return = data[end_point].resample(sampling).last().pct_change().dropna()
             cm_returns = Asset.compute_cumulative_return(returns = asset_return, in_percent=in_percent)
         return cm_returns 
+    
+    def price_change(self, within_dates = None, end_point = 'Close', sampling = 'D'):
+        """
+        Returns: price change in % 
+        """
+        if within_dates is None:
+            within_dates = self.date_range 
+        data = tools.choose_dates(self.data, within_dates)
+        if data is not None:
+            resampled_data = data[end_point].resample(sampling).last().dropna()
+            return ((resampled_data[-1] - resampled_data[0])/resampled_data[0])*100
     
     def investment_return(self, within_dates =  None, 
                  end_point = 'Close', sampling = 'D', 

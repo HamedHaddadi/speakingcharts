@@ -420,7 +420,7 @@ class IndexFundamentals:
 		len_df = len(sector_funds.index)
 		fig = px.bar(sector_funds, y = 'Stock', x = fundamental, 
 				labels = {'Stock': 'ticker symbol'},
-					hover_name = 'Name', hover_data = [fundamental, 'Sector', 'Stock'],
+					hover_name = 'Name', hover_data = [fundamental, 'Sector', 'Stock', 'Latest Price,$'],
 					color_continuous_scale = 'Turbo',
 			 		color = fundamental, height = int(800*(len_df/40)), template = 'seaborn', orientation = 'h')
 	
@@ -537,11 +537,12 @@ class PerformanceHist:
 							'Last Year': 'LAST_YEAR'}
 	def __init__(self, hists = None):
 		self.fields = hists._fields 
+		univ_idx = [idx for idx,field in enumerate(self.fields) if 'UNIVERSE' in field][0]
 		self.histograms = hists
 		self.hist_id = self.fields[0].split('_')[0] 
 		self.base_name = self.hist_id + '_perform_hist'
 		self.dropdown_id = self.base_name + '_dropdown'
-		self.stock_list = list(getattr(self.histograms, self.histograms._fields[0]).Name)
+		self.stock_list = list(getattr(self.histograms, self.histograms._fields[univ_idx]).Name)
 		self.radio_id = self.base_name + '_radio'
 		self.graph_id = self.base_name + '_graph'
 		self.submit_button_id = self.base_name + '_submit'

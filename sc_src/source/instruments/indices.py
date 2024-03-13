@@ -32,6 +32,7 @@ class Index:
     sector_fundamentals_filename = keys.INDEX_SECTOR_FUNDAMENTALS 
     index_fundamentals_filename = keys.INDEX_FUNDAMENTALS  
 
+    interval_keys = keys.TIME_INTERVALS_KEYS
     fundamentals_keys = ['Market Cap', 'P/E(TTM)', 'Dividend %'] 
     current_time = datetime.now().strftime('%Y-%m-%d-%H-%M')  
 
@@ -52,6 +53,7 @@ class Index:
         self.capital_gains = {}
         # best performing assets based on cumulative returns 
         self.date_range = self._set_date_range(date_range = date_range) 
+        self.latest_date = self.date_range[1]
         # long format dataframes
         # monthly sampling 
         self.sector_mean_return_long_m = None
@@ -62,7 +64,12 @@ class Index:
         self._main_save_path = tools.make_dir(main_save_path) 
         self._risk_free = None 
         self.daily_risk_free = None 
-
+        # interval return methods and attributes
+        self.intervals = None 
+        # contains information of return and price movement within intervals 
+        self.intervals_data = None 
+        self._generate_intervals()
+        
     @property 
     def main_save_path(self):
         return self._main_save_path  
@@ -119,7 +126,18 @@ class Index:
             date_min = asset_date_min 
         if asset_date_max >= date_max:
             date_max = asset_date_max 
-        return date_min, date_max 
+        return date_min, date_max
+
+    #. Date range generator for return and return distribution calculations 
+    def _generate_intervals(self):
+        """
+        This method is equivalent to _generate_dates in the Performance class
+        """        
+        init_dates = [tools.get_one_week_ago(self.latest_date), tools.get_one_month_ago(self.latest_date), 
+						tools.get_six_months_ago(self.latest_date), tools.get_one_year_ago(self.latest_date), 
+							tools.get_two_years_ago(self.latest_date)]   
+        self.intervals = {key:(init_date, self.latest_date) for key,init_date in zip(self.interval_keys, init_dates)}    
+        
 
     def save(self):
         """
@@ -174,7 +192,8 @@ class Index:
 
     # ### return, volatility, sharpe ### #                
     def compute_investment_returns(self, within_dates = None,
-                                 end_point = 'Close', sampling = 'D'):
+                                 end_point = 'Close', sampling = 'D',
+                                    add_ticker_info = True, return_prefix = ''):
         """
         computes cumulative_return[-1] of individual stocks 
         period cumulative returns = investment return 
@@ -186,19 +205,28 @@ class Index:
         if within_dates is None:
             within_dates = self.date_range 
         
-        investment_returns_dict = {'Ticker':[], 'Sector':[], 'Return':[], 'Name':[]}
+        return_key = return_prefix + 'Return'
+        
+        main_return_dict = {return_key:[]}
+        ticker_info_dict = {'Ticker':[], 'Sector':[], 'Name':[], 'Price_Change':[], 'Latest_Price':[]}
         for stock in self.assets.values():
             investment_return = stock.investment_return(within_dates = within_dates, 
                                 end_point = end_point, sampling = sampling, initial_investment = 0)
             if investment_return is not None:
-                investment_returns_dict['Return'].append(list(investment_return.values())[0])
-                investment_returns_dict['Ticker'].append(stock.symbol)
-                investment_returns_dict['Sector'].append(stock.sector)
-                investment_returns_dict['Name'].append(stock.name)
-        
-        investment_returns_df = pd.DataFrame.from_dict(investment_returns_dict, orient = 'columns')
+                main_return_dict[return_key].append(list(investment_return.values())[0])
+                if add_ticker_info:
+                    price_change = stock.price_change(within_dates = within_dates, end_point = end_point, 
+                                sampling = sampling)
+                    ticker_info_dict['Ticker'].append(stock.symbol)
+                    ticker_info_dict['Sector'].append(stock.sector)
+                    ticker_info_dict['Name'].append(stock.name)
+                    ticker_info_dict['Price_Change'].append(price_change)
+                    ticker_info_dict['Latest_Price'].append(stock.latest_price)
+        if add_ticker_info:
+            main_return_dict.update(ticker_info_dict)
+        investment_returns_df = pd.DataFrame.from_dict(main_return_dict, orient = 'columns')
         return investment_returns_df 
-    
+        
     # ### compute risk_return dataframe: return, sharpe, volatility ### #
     def compute_risk_return(self, within_dates = None, end_point = 'Close',
             sampling = 'D', risk_free = 'DGS10'):
@@ -345,7 +373,9 @@ class Index:
             they can also be loaded 
         Note that in the final plot 0 must be dropped, otherwise None will be dropped 
         """
-        fundamentals = {'Stock':[], 'Sector':[], 'Market Cap':[], 'P/E(TTM)': [], 'Dividend %':[], 'Name':[]}
+        fundamentals = {'Stock':[], 'Sector':[],
+                    'Market Cap':[], 'P/E(TTM)': [],
+                     'Dividend %':[], 'Name':[], 'Latest Price,$': []}
         for ticker, stock in self.assets.items():
             fundamentals['Stock'].append(ticker)
             fundamentals['Sector'].append(stock.sector)
@@ -353,6 +383,7 @@ class Index:
             fundamentals['Market Cap'].append(stock.fundamentals['marketCap'])
             fundamentals['P/E(TTM)'].append(stock.fundamentals['trailingPE'])
             fundamentals['Dividend %'].append(stock.fundamentals['dividendYield'])
+            fundamentals['Latest Price,$'].append(stock.latest_price)
         
         self.fundamentals = pd.DataFrame(fundamentals)
         #self.fundamentals.dropna(inplace = True)
@@ -363,21 +394,61 @@ class Index:
         sect_filename = path.join(self.main_save_path, 'sector_fundamentals.parquet')
         self.fundamentals.to_parquet(fund_filename, engine = 'auto', index = False, compression = 'snappy')
         self.sector_fundamentals.to_parquet(sect_filename, engine = 'auto', index = False, compression = 'snappy')    
-    # ########################################################### #
+
+    # ### computing investment return intervals ### #
+    @staticmethod 
+    def _generate_histogram(return_df, key = None, bins = None):
+        hist, bins = np.histogram(return_df[key].values, bins = bins)
+        bins = np.array([0.5*(bin[0] + bin[1]) for bin in zip(bins[:-1], bins[1:])])
+        hist_df = pd.DataFrame(np.c_[bins[:, np.newaxis], hist[:, np.newaxis]], columns = [key, 'Number'])
+        return hist_df[hist_df['Number'] != 0]
+         
+    def generate_price_movement_and_histograms_in_intervals(self, sampling = 'D', bins = 50):
+        """
+        generates price movements, returns and the latest price for all assets
+        """
+        all_intervals = []
+        for count, interval_info in enumerate(self.intervals.items()):
+            interval_key, interval = interval_info
+            if count == 0:
+                add_ticker_info = True 
+                hist_keys = [interval_key + '_Return', 'Price_Change', 'Latest_Price']
+            else:
+                add_ticker_info = False 
+                hist_keys = [interval_key + '_Return']
+            
+            interval_return_df = self.compute_investment_returns(within_dates = interval,
+                                    sampling = sampling, add_ticker_info = add_ticker_info, return_prefix=interval_key + '_')
+            interval_return_df[interval_key +'_'+'Return'] *= 100 
+            all_intervals.append(interval_return_df)
+            # three histograms are also generated: Return, Latest price, Price Change
+            for key in hist_keys:
+                hist_key_df = self._generate_histogram(interval_return_df, key = key, bins = bins)
+                filename =  key.lower() + '_Hist_In_Interval_Of_' + interval_key + '.csv'
+                hist_key_df.to_csv(path.join(self._main_save_path, filename), sep = ',', header = True, index = False, 
+                        float_format = '%.5f')
+
+        self.intervals_data = pd.concat(all_intervals, axis = 1)
+        self.intervals_data.to_csv(path.join(self._main_save_path, 'intervals_data.csv'), sep = ',', 
+                header = True, index = False)
 
     # #### Load sector long dataframes and fundamental data  #### #   
     def load_sector_mean_returns_long(self):
-        
-        self.sector_mean_return_long_m = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__,
+        self.sector_mean_return_long_m = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__.upper(),
                      self.sector_long_filename_m))
-        self.sector_mean_return_long_q = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__,
+        self.sector_mean_return_long_q = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__.upper(),
                      self.sector_long_filename_q))
     
     def load_fundamentals(self):
-        _sector_fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__, self.sector_fundamentals_filename))
+        _sector_fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__.upper(), self.sector_fundamentals_filename))
         self.sector_fundamentals = _sector_fundamentals[_sector_fundamentals['Sector'].isin(keys.SECTORS)]
-        self.fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__, self.index_fundamentals_filename))
-	# ############################################################## #
+        self.fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__.upper(), self.index_fundamentals_filename))
+	
+    def load_intervals_data(self):
+        pass 
+    
+    
+    # ############################################################## #
 
     @classmethod 
     def pull_assets(cls, period = 'max', interval = '1d',
@@ -475,7 +546,6 @@ class Index:
             new_sectors[sector] = list(set(self.sectors.get(sector, [])).union(set(other.sectors.get(sector, []))))
         self.sectors = new_sectors 
         return self 
-
 
     def __add__(self, other):
         assets = deepcopy(self.assets)

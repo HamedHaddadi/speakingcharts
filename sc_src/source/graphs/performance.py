@@ -9,7 +9,6 @@ histograms = performance.load_distributions()
 
 asset_performance_population = components.PerformanceHist(histograms).layout 
 
-
 performance_tab = dbc.Tab([asset_performance_population], label = ['PERFORMANCE'])
 
 
