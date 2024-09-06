@@ -7,6 +7,8 @@ import pandas_datareader.data as web
 import yfinance as yf 
 import datetime 
 from .. utils import market_data, tools, keys  
+import traceback 
+import sys 
 
 # ################### #
 #  Asset Base Class   #
@@ -18,8 +20,8 @@ class Asset(metaclass =ABCMeta):
                     'sector', 'dividendRate', 'dividendYield']
     """
     _annualize = {'M': 12, 'D': 252, 'W': 52}
-    fundamentals_numeric_keys = ['trailingPE','forwardPE', 'marketCap', 'dividendRate', 'dividendYield']
-    fundamentals_id_keys = ['sector', 'shortName']
+    fundamentals_numeric_keys = list(keys.FUNDAMENTALS_NUMERIC_KEYS.values())
+    fundamentals_id_keys = list(keys.FUNDAMENTALS_ID_KEYS.values())
 
     def __init__(self, symbol = None, data = None, fundamentals = None,
             name = None, sector = None):
@@ -32,7 +34,7 @@ class Asset(metaclass =ABCMeta):
         # final date ranfge used by the model 
         self.last_date_range = None 
         self.latest_date = self.data.index.date.max()
-        self.latest_price = self.data['Close'][-1]
+        self.latest_price = self.data['Close'].iloc[-1]
         self._risk_free = None 
 
     # #### Different prices #### #
@@ -96,7 +98,6 @@ class Asset(metaclass =ABCMeta):
     def dates(frame):
         return frame.index.min(), frame.index.max()
 
-     
     @staticmethod
     def compute_cumulative_return(returns = None, in_percent = False):
         if in_percent:
@@ -278,24 +279,26 @@ class Asset(metaclass =ABCMeta):
     @staticmethod 
     def _numeric_value_is(value):
         try:
-            return float(value)
+            value = float(value)
+            return value 
         except:
-            return None 
+            return 0
 
+    
     @staticmethod 
     def pull_history_and_fundamentals(symbol = None, period = None, 
                     interval = None, start_date = None, end_date = None):
         """
         pulls history and generates fundamentals as well 
         """
-        fundamentals = {key:None for key in Asset.fundamentals_numeric_keys + Asset.fundamentals_id_keys}
-
-        try:
-            symbol_data = yf.Ticker(symbol)
-            if start_date is None and end_date is None:
-                data = symbol_data.history(period = period, interval = interval)
-            else:
-                data = symbol_data.history(start = start_date, end = end_date)
+        fundamentals = {key:0 for key in Asset.fundamentals_numeric_keys} 
+        fundamentals.update({key:None for key in Asset.fundamentals_id_keys})
+        symbol_data = yf.Ticker(symbol)
+        if start_date is None and end_date is None:
+            data = symbol_data.history(period = period, interval = interval)
+        else:
+            data = symbol_data.history(start = start_date, end = end_date)
+        if len(data) != 0:
             for key,value in symbol_data.info.items():
                 if key in Asset.fundamentals_numeric_keys:
                     fundamentals[key] = Asset._numeric_value_is(value)
@@ -306,7 +309,7 @@ class Asset(metaclass =ABCMeta):
             new_name = old_name.replace('"', '')
             fundamentals['shortName'] = new_name    
             return data, fundamentals 
-        except:
+        else:
             return None, None 
 
 # ################### #
@@ -323,14 +326,14 @@ class Stock(Asset):
         interval: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo
         start and end_date: year-month-day 
         """
-        try:
-            data, fundamentals = Stock.pull_history_and_fundamentals(symbol = symbol,
-                                            period = period, interval = interval, start_date = start_date, end_date = end_date)
         
-            if data is not None and fundamentals is not None:
-                return cls(symbol = symbol, data = data, sector = fundamentals['sector'],
+        data, fundamentals = Stock.pull_history_and_fundamentals(symbol = symbol,
+                                period = period, interval = interval, start_date = start_date, end_date = end_date)
+
+        if data is not None:
+            return cls(symbol = symbol, data = data, sector = fundamentals['sector'],
                         fundamentals = fundamentals, name = fundamentals['shortName'])
-        except:
+        elif data is None:
             return None 
 
 # ################################# #

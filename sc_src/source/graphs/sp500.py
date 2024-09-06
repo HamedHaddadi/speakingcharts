@@ -25,6 +25,7 @@ sp.load_sector_mean_returns_long()
 sp.load_fundamentals()
 # loads sp500 and spxew (equal weight sp500) dataframes
 sp.load_index()
+sp.load_intervals_dataframe()
 
 # define dates and date differences 
 sp_start_date, sp_end_date = sp.date_range[0], sp.date_range[1]
@@ -48,14 +49,18 @@ stock_returns = components.StockReturns(index_name = index_name, index_start_dat
 	index_end_date = sp_end_date, index_object=sp).layout 
 
 # ######### Risk Return Scatter Plots ########### #
-stock_risk_return = components.StockRiskReturn(index_name = index_name, index_start_date= sp_start_date, 
-		index_end_date = sp_end_date, index_object = sp).layout 
+#stock_risk_return = components.StockRiskReturn(index_name = index_name, index_start_date= sp_start_date, 
+	#	index_end_date = sp_end_date, index_object = sp).layout 
 
 # ##########   Sector market cap pie chart ############ #
 sector_market_cap = components.SectorMarketCap(index_name = index_name, index_object=sp).layout 
 # ######### Methods for generating index fundamentals ######### #
 # available keys: Market Cap, P/E, Dividend %
-index_fundamentals = components.IndexFundamentals(index_name = index_name, index_object = sp).layout 
+index_fundamentals = components.IndexFundamentals(index_name = index_name, index_object = sp).layout
+# index interval returns 
+index_interval = components.IntervalReturnDisplay(index_name = index_name, interval_df = sp.intervals_data).layout  
+# interval checklist mode 
+index_interval_checklist = components.IntervalDisplayCheckList(index_name = index_name, interval_df=sp.intervals_data, options_key = 'Return').layout
 
 # #############  	   Tabs     	############## #
 sp500_tab = dbc.Tab([
@@ -63,8 +68,10 @@ sp500_tab = dbc.Tab([
 		sector_xew_history, 
 			sector_return_history, 
 				stock_returns, 
-					stock_risk_return,
+					#stock_risk_return,
 						sector_market_cap, 
 							index_fundamentals,
+								index_interval, 
+									index_interval_checklist 
 ], label = ['SP500'])
 

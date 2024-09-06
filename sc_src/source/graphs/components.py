@@ -8,6 +8,7 @@ import dash_bootstrap_components as dbc
 import pandas as pd 
 import plotly.graph_objects as go 
 import plotly.express as px
+from plotly.subplots import make_subplots 
 from dash import html, dcc, callback 
 from dash.dependencies import Input, Output, State 
 from dash.exceptions import PreventUpdate 
@@ -23,6 +24,12 @@ SECTOR_COLORS = {'Real Estate': '#FF00FF', 'Energy': '#000000', 'Consumer Discre
 				'Health Care': '#800000', 'Communication Services': '#808000', 
 					'Information Technology': '#00008B', 'Industrials': '#9ACD32', 
 						'Utilities': '#8B4513', 'Materials': '#FF0000'}
+INDEX_COLORS = {'SP500': '#FF4933', 'DowJones': '#FFB833', 
+						'Nasdaq': '#33BEFF', 'Russell2000': '#3333FF', 
+								'Russell3000': '#FF338D'}
+
+
+
 # ###### Layout Components that are useful for all indices ###### #
 # display the current date to mention data currency 
 class DateRangeDisplay:
@@ -319,7 +326,6 @@ class StockRiskReturn:
 		select_asset_fig.update_traces(marker  = {'size': 25, 'symbol': 'x', 'line': {'width': 4, 'color': marker_line_color}})
 		fig.add_trace(select_asset_fig['data'][0])
 		
-		
 		fig.layout.coloraxis.colorscale = 'Turbo'
 		fig.layout.font.family = 'Gill Sans'
 		fig.layout.font.size = 20
@@ -503,11 +509,14 @@ class XEWDisplay:
 		within_dates = (start_date, end_date)
 		x_data = tools.choose_dates_lite(self.index_object.x_index, within_dates = within_dates)
 		ew_data = tools.choose_dates_lite(self.index_object.ew_index, within_dates = within_dates)
+
+		print('x_data is: ', x_data)
+		print('ew_data is: ', ew_data)
 		
 		fig = go.Figure()
-		fig.add_scatter(x = x_data.index, y = x_data['index_value'],
+		fig.add_scatter(x = x_data.index, y = x_data['Close'],
 		 			mode = 'lines', name = self.index_name + ' index', line_color = '#FF00FF')
-		fig.add_scatter(x = ew_data.index, y = ew_data['index_value'],
+		fig.add_scatter(x = ew_data.index, y = ew_data['Close'],
 		 			mode = 'lines', name = self.index_name + ' equal weight', line_color = '#800000')
 		fig.data[0].showlegend = True 
 		fig.layout.height = 600
@@ -622,13 +631,325 @@ class PerformanceHist:
 			fig.update_layout(annotations = arrow_list)
 
 		return fig
+
+# ########################################################################## #
+# compare returns and price using a double bar chart with sorting capability #
+# ########################################################################## #
+class IntervalReturnDisplay:
+	"""
+	This class has one dropdown menu and a radio botton
+	the values of the radio bottom is determined based on the dropdown choices 
+	it displays the results on a double-sided bar chart
+	"""
+	base_name = '_interval_returns'
+	def __init__(self, index_name = None, interval_df = None):
+		self.interval_df = interval_df
+		self.display_range_max = len(self.interval_df.index)//50 + 1 
+		self.dropdown_one_id = index_name +  self.base_name + '_dropdown_1' 
+		self.dropdown_two_id = index_name + self.base_name + '_dropdown_2'
+		self.loading_id = index_name + self.base_name + '_loading'
+		self.dropdown_three_id = index_name + self.base_name + '_dropdown_3'
+		self.radio_id = index_name + self.base_name + '_radio'
+		self.graph_id = index_name + self.base_name + '_graph'
+		self.submit_id = index_name + self.base_name + '_submit'
+		self.options = [col for col in self.interval_df.columns if 'Return' in col] 
+
+		self.layout = html.Div([
+			html.H2(f'compare returns at different time intervals for {index_name}', style = styles.h2_style),
+			dbc.Row([
+				html.Main('In this graph you can compare returns of stocks in different time periods', style = styles.main_style),
+				dbc.Col([
+					dcc.Dropdown(id = self.dropdown_one_id, placeholder = 'choose the first value to compare', 
+						options = self.options, style = styles.single_dropdown)
+				]),
+				dbc.Col([
+					dcc.Dropdown(id = self.dropdown_two_id, placeholder = 'choose the second value to compare', 
+						options = self.options, style = styles.single_dropdown)
+				]),
+			]),
+			dbc.Row([
+				dbc.Col([
+					dcc.RadioItems(id = self.radio_id, options = ['by first value', 'by second value', 'latest price low to high'],
+					 		value = self.options[1], style = styles.radio_item)]),
+				dbc.Col([
+					dcc.Dropdown(id = self.dropdown_three_id, placeholder = 'choose number of stocks to display', 
+						multi = False, options = [{'label': 'display up to ' + str(50*count) + ' stocks', 
+						'value': 50*count} for count in range(1,self.display_range_max)],
+					style = styles.single_dropdown)
+				]),
+			]),
+			# row ended
+			dbc.Button('crunch!', id = self.submit_id, n_clicks = 0, style = styles.submit),
+				dcc.Loading([
+					dcc.Graph(id = self.graph_id, figure = tools.blank_figure(),
+				 		style = {'width': '100%', 'margin-left': '20px', 'margin-top': '20px'})
+				], id = self.loading_id, type = 'cube')
+		], id = index_name + self.base_name + 'div')
+		self.callback = callback(Output(self.graph_id, 'figure'),
+					Input(self.submit_id, 'n_clicks'),
+							State(self.dropdown_one_id, 'value'),
+									State(self.dropdown_two_id, 'value'),
+										State(self.radio_id, 'value'), 
+											State(self.dropdown_three_id, 'value'), prevent_initial_call = True)(self.plot_interval_returns)
+		
+	
+	def plot_interval_returns(self, n_clicks, column_id_one, column_id_two, input_sort_key, num_stocks_display):
+	
+		sort_key = {'by first value': column_id_one,
+		 				'by second value': column_id_two, 
+						 	'latest price low to high': 'Latest_Price'}[input_sort_key]
+		ascending_key = {'by first value': True,
+		 				'by second value': True, 
+						 	'latest price low to high': False}[input_sort_key]
+
+		interval_df = self.interval_df.sort_values(by = sort_key, ascending = ascending_key, inplace = False)
+		interval_df.reset_index(drop = True, inplace = True)
+		interval_df = interval_df[interval_df.index <= num_stocks_display]
+
+		id_one_min = interval_df[column_id_one].min()
+		id_one_max = interval_df[column_id_one].max()
+
+		id_two_min = interval_df[column_id_two].min()
+		id_two_max = interval_df[column_id_two].max()
+
+		range_min = min([id_one_min, id_two_min])
+		range_max = max([id_one_max, id_two_max])
+
+		num_assets = len(interval_df.index)
+
+		fig = px.bar(interval_df, y = 'Ticker', x = [column_id_one, column_id_two], 
+				range_x = [range_min, range_max], barmode = 'relative',
+				orientation = 'h', hover_data=['Latest_Price'], hover_name = 'Name', 
+					height = 40*num_assets)
+		fig.update_traces(width = 0.4)
+		fig.layout.font.family = 'Gill Sans'
+		fig.layout.font.size = 10
+		fig.layout.xaxis.gridcolor = 'black'
+		fig.layout.yaxis.gridcolor = 'black'
+		fig.layout.xaxis.titlefont.family = 'Gill Sans'
+		fig.layout.xaxis.titlefont.size = 10
+		fig.layout.xaxis.tickfont.size = 10
+		fig.layout.yaxis.titlefont.family = 'Gill Sans'
+		fig.layout.yaxis.titlefont.size = 10
+		fig.layout.coloraxis.colorbar.tickfont.size = 10
+		return fig 
+
+# ############################################ #
+# Interval display using checklists			   #
+# ############################################ #
+class IntervalDisplayCheckList:
+	base_name = '_interval_display'
+	base_keys = ['Ticker', 'Sector', 'Name', 'Latest_Price']
+	def __init__(self, index_name = None, interval_df = None, options_key = 'Return'):
+		self.interval_df = interval_df
+		self.display_range_max = len(self.interval_df.index)//50 + 1
+		self.div_id = index_name + self.base_name + '_div'
+		self.checklist_one_id = index_name + self.base_name + '_checklist_one'
+		self.checklist_two_id = index_name + self.base_name + '_checklist_two'
+		self.checklist_three_id = index_name + self.base_name + '_checklist_three'
+		self.dropdown_id = index_name + self.base_name + '_dropdown'
+		self.loading_id = index_name + self.base_name + '_loading'
+		self.graph_id = index_name + self.base_name + '_graph'
+		self.submit_id = index_name + self.base_name + '_submit'
+		self.options = [col for col in self.interval_df.columns if options_key in col]
+		self.sectors = list(set(self.interval_df['Sector']))
+
+		self.layout = html.Div([
+			html.H2(f'compare {options_key} for various time intervals on a bar chart', style = styles.h2_style),
+			dbc.Row([
+				html.Main(f"""In this graph, all {options_key} are displayed on bar chart to compare. Choose values from 
+					the checklist to display. You can also view a sorted bar chart by choosing a key.""", style = styles.main_style),
+				dbc.Col([
+					dcc.Checklist(id = self.checklist_one_id, options = self.options, inline = True, 
+						value = [self.options[0]], labelStyle = styles.checklist_label, style = styles.checklist)
+				]),
+				dbc.Col([
+					dcc.Checklist(id = self.checklist_two_id, options = self.options + ['Latest_Price'],
+						inline = True, value = [self.options[0]], labelStyle = styles.checklist_label, 
+							style = styles.checklist)
+				]),
+				dbc.Col([
+					dcc.Checklist(id = self.checklist_three_id, options = self.sectors, inline = True, 
+						value = [self.sectors[0]], labelStyle= styles.checklist_label, style = styles.checklist)
+				]),
+				dbc.Col([
+					dcc.Dropdown(id = self.dropdown_id, placeholder = 'choose number of stocks to display', 
+						multi = False, options = [{'label': 'display up to ' + str(50*count) + ' stocks', 
+						'value': 50*count} for count in range(1, self.display_range_max)],
+					style = styles.single_dropdown)
+				]),
+			]),
+			dbc.Button('crunch!', id = self.submit_id, n_clicks = 0, style = styles.submit),
+			dcc.Loading([
+				dcc.Graph(id = self.graph_id, figure = tools.blank_figure(),
+				 		style = {'width': '100%', 'margin-left': '20px', 'margin-top': '20px'})
+			], id = self.loading_id, type = 'cube')
+		], id = self.div_id)
+		self.callback = callback(Output(self.graph_id, 'figure'), 
+					Input(self.submit_id, 'n_clicks'), 
+						State(self.checklist_one_id, 'value'),
+							State(self.checklist_two_id, 'value'), 
+								State(self.checklist_three_id, 'value'), 
+									State(self.dropdown_id, 'value'), 
+									 prevent_initial_call = True)(self.plot_intervals)
+		
+	def plot_intervals(self, n_clicks, display_keys, sort_keys, sector_keys, num_display):
+
+		interval_df = self.interval_df[list(display_keys) + self.base_keys]
+		interval_df = interval_df[interval_df['Sector'].isin(sector_keys)]
+		min_value = interval_df[list(display_keys)].min(axis = 1).min()
+		max_value = interval_df[list(display_keys)].max(axis = 1).max()
+		ascending = [True]*len(sort_keys)
+		interval_df = interval_df.sort_values(by = sort_keys, ascending = ascending, inplace = False)
+		interval_df.reset_index(drop = True, inplace = True)
+		interval_df = interval_df[interval_df.index <= num_display]
+
+		num_assets = len(interval_df.index)
+		fig = px.bar(interval_df, y = 'Ticker', x = display_keys, range_x = [min_value, max_value],
+				barmode = 'relative', orientation = 'h', hover_data = ['Latest_Price'], 
+						hover_name = 'Name', height = 30*num_assets)
+		
+		fig.update_traces(width = 0.4)
+		fig.layout.font.family = 'Gill Sans'
+		fig.layout.font.size = 15
+		fig.layout.xaxis.gridcolor = 'black'
+		fig.layout.yaxis.gridcolor = 'black'
+		fig.layout.xaxis.titlefont.family = 'Gill Sans'
+		fig.layout.xaxis.titlefont.size = 15
+		fig.layout.xaxis.tickfont.size = 15
+		fig.layout.yaxis.titlefont.family = 'Gill Sans'
+		fig.layout.yaxis.titlefont.size = 15
+		fig.layout.coloraxis.colorbar.tickfont.size = 15
+		return fig
+
+# ######################################## #
+#	Macro Trend Graph components 		   #
+# ######################################## #
+
+class IndexReturnFedAsset:
+	"""
+	generates a line graph of index return in a time period
+	on y1 axis and compares with fed asset on y2 axis. 
+	Example is return of sp500 vs fed fund rate
+	"""
+	base_name = 'index_vs_fed_'
+
+	def __init__(self, index_fed_object = None):
+		self.index_fed_object = index_fed_object
+		self.start_date, self.end_date = self.index_fed_object.available_date_range 
+
+		# component ids
+		graph_id = self.base_name + 'graph'
+		date_picker_id = self.base_name + 'date_picker'
+		submit_button_id = self.base_name + 'submit'
+		loader_id = self.base_name + 'loader'
+		# for indices
+		checklist_id = self.base_name + 'checklist'
+		# for fed asset
+		radio_id = self.base_name + 'radio'
+		# keys 
+		fed_keys = list(self.index_fed_object.fed_assets.keys())
+		fed_labels = [' '.join(elem.split('_')[1:]) for elem in fed_keys]
+
+		radio_options = {key:value for key,value in zip(fed_keys, fed_labels)}
+
+		index_keys = list(self.index_fed_object.indices.keys())
+
+		
+		self.layout = html.Div([
+			html.H2('Compare return of indices with a fed metric such as Fed Funds Rate (interest rates)', style = styles.h2_style),
+			dbc.Row([
+				html.Main("""
+					In this interactive graph you can compare return of well known indices such as
+						SP500 and Russell2000 with macro trends such as Fed fund rates.  
+						First choose a date range, which can go back to 1977. Then choose indices 
+							and the macro data and push the submit button. 
+				""", style = styles.main_style),
+				dbc.Col([
+					dcc.DatePickerRange(id = date_picker_id,
+						 min_date_allowed = self.start_date, max_date_allowed = self.end_date,
+						  start_date = self.start_date, initial_visible_month = self.start_date,
+						   end_date = self.end_date, style = styles.date_picker)
+				]),
+				dbc.Col([
+					dcc.RadioItems(id = radio_id, options = radio_options,
+						 value = fed_keys[0], style = styles.radio_item)
+				]), 
+				dbc.Col([
+					dcc.Checklist(id = checklist_id,
+				 		options = index_keys, inline = True, value = [index_keys[0]],
+				 	 		labelStyle = styles.checklist_label, style = styles.checklist)					
+				]),
+					]), 
+			dbc.Button('crunch!', id = submit_button_id, n_clicks = 0, style = styles.submit), 
+				dcc.Loading([
+					dcc.Graph(id = graph_id, figure = tools.blank_figure(),
+					 style = {'width': '95%', 'margin-left': '20px', 'mergin-right': '20px', 'margin-top': '20px'})
+							], id = loader_id, type='cube')
+								], id = self.base_name + '_div')
+		
+		self.callback = callback(Output(graph_id, 'figure'),
+			Input(submit_button_id, 'n_clicks'),
+				 State(date_picker_id, 'start_date'),
+				 	 State(date_picker_id, 'end_date'),
+					  	 State(radio_id, 'value'),
+						   	State(checklist_id, 'value'),
+							   	 prevent_initial_call = True)(self.plot_indices_vs_fed)
+	
+	def plot_indices_vs_fed(self, n_clicks, start_date, end_date, fed_asset, indices):
+				
+		index_returns = self.index_fed_object.cumulative_return(indices = indices, 
+				within_dates = (start_date, end_date), in_percent = True)
+		 
+		fed_df = self.index_fed_object.fed_assets[fed_asset]
+
+		all_asset_dfs = [fed_df] + list(index_returns.values())
+		all_assets_common_time = tools.find_assets_common_times(*all_asset_dfs)
+
+		fed_df = all_assets_common_time[0]
+		index_returns = all_assets_common_time[1:]
+
+		fed_label = ' '.join(list(fed_df.columns)[0].split('_'))
+		
+		fig = make_subplots(specs = [[{'secondary_y': True}]])
+		fig.add_scatter(x = fed_df.index, y = fed_df.iloc[:,0], mode = 'lines', 
+							name = fed_label.upper(), line_color = '#000000', secondary_y = True)
+
+		for index, return_df in zip(indices, index_returns):
+			fig.add_scatter(x = return_df.index, y = return_df.values, 
+				mode = 'lines', name = index, 
+					line_color = INDEX_COLORS[index], secondary_y = False)
+		
+		fig.data[0].showlegend = True
+		fig.layout.height = 600
+		fig.layout.xaxis.gridcolor = 'black'
+		fig.layout.yaxis.gridcolor = 'black'
+		fig.layout.xaxis.title = 'date'
+		fig.layout.yaxis.title = 'index return, %'
+		fig.layout.yaxis2.title = f'{fed_label}, %'  
+		fig.layout.font.family = 'Gill Sans'
+		fig.layout.font.size = 20
+		return fig
+		
+		
+
+		
+
+			
+		
 		
 
 
 
 
 
-		 
+
+
+
+
+
+
+
 
 
 
@@ -638,22 +959,8 @@ class PerformanceHist:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	
+	
 
 
 

@@ -24,6 +24,7 @@ from . import components
 nq = Nasdaq.load_assets()
 nq.load_sector_mean_returns_long()
 nq.load_fundamentals()
+nq.load_intervals_dataframe()
 
 # define dates and date differences 
 nq_start_date, nq_end_date = nq.date_range[0], nq.date_range[1]
@@ -46,6 +47,8 @@ sector_market_cap = components.SectorMarketCap(index_name = index_name, index_ob
 # ######### Methods for generating index fundamentals ######### #
 # available keys: Market Cap, P/E, Dividend %
 index_fundamentals = components.IndexFundamentals(index_name = index_name, index_object = nq).layout 
+# interval 
+index_interval = components.IntervalReturnDisplay(index_name = index_name, interval_df = nq.intervals_data).layout
 
 # #############  	   Tabs     	############## #
 nasdaq_tab = dbc.Tab([
@@ -54,4 +57,5 @@ nasdaq_tab = dbc.Tab([
 			stock_returns, 
 				sector_market_cap, 
 					index_fundamentals,
+						index_interval
 ], label = ['NASDAQ'])

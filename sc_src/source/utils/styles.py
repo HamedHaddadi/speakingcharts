@@ -116,12 +116,12 @@ date_picker_dbc = {'size': 8, 'offset': 2, 'lg': 10,
 
 # checklist styles 
 checklist_label = {'display': 'block', 
-					'left': '10%',
+					'left': '2%',
 					'font-family': 'Gill Sans',
-					  'width': '50%',
-						'font-size': '20px'}
-checklist = {'margin-left': '30%'}
+					  'width': '70%',
+						'font-size': '12px'}
+checklist = {'margin-left': '20%'}
 
 # radioitems style 
 radio_item = {'font-family': 'Gill Sans', 
-				'font-size': '22px'}
+				'font-size': '15px'}

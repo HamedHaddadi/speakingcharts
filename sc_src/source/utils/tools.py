@@ -33,7 +33,8 @@ def to_date(input_date):
 	if isinstance(input_date, str):
 		return datetime.strptime(input_date, '%Y-%m-%d').date()
 	elif isinstance(input_date, date):
-		return input_date
+		return input_date 
+	
 
 def adjust_dates(start_date, end_date, default_start = None, default_end = None):
 	if start_date is None:
@@ -67,16 +68,17 @@ def choose_dates(frame, within_dates = None):
 choose_dates_lite = lambda frame, within_dates: frame[(frame.index.date >= within_dates[0]) & (frame.index.date <= within_dates[1])]
 
 
-def find_assets_common_times(asset_1 = None, asset_2 = None):
-    min_1 = asset_1.index.date.min()
-    max_1 = asset_1.index.date.max()
-    min_2 = asset_2.index.date.min()
-    max_2 = asset_2.index.date.max()
-    min_date = max(min_1, min_2)
-    max_date = min(max_1, max_2)
-    asset_1 = choose_dates(asset_1, (min_date, max_date))
-    asset_2 = choose_dates(asset_2, (min_date, max_date))
-    return asset_1, asset_2 
+def find_assets_common_times(*assets):
+	mins = [] 
+	maxs = [] 
+	for asset in assets:
+		mins.append(asset.index.date.min())
+		maxs.append(asset.index.date.max())
+	min_date = max(mins)
+	max_date = min(maxs)
+
+	return [choose_dates(asset, within_dates = (min_date, max_date)) for asset in assets]
+
 
 # #### time difference operations #### #
 get_one_week_ago = lambda end_date: end_date - timedelta(days = 7)
@@ -85,6 +87,9 @@ get_three_months_ago = lambda end_date: end_date - timedelta(days = 90)
 get_six_months_ago = lambda end_date: end_date - relativedelta(months = 6)
 get_one_year_ago = lambda end_date: end_date - relativedelta(years = 1)
 get_two_years_ago = lambda end_date: end_date - relativedelta(years = 2)
+get_three_years_ago = lambda end_date: end_date - relativedelta(years = 3)
+get_four_years_ago = lambda end_date: end_date - relativedelta(years = 4)
+get_five_years_ago = lambda end_date: end_date - relativedelta(years = 5)
 
 def compute_time_deltas(end_date = None):
 	one_day_ago = end_date - timedelta(days = 1)

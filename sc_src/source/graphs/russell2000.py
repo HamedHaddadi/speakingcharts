@@ -13,6 +13,7 @@ from . import components
 ru2 = Russell2000.load_assets()
 ru2.load_sector_mean_returns_long()
 ru2.load_fundamentals()
+ru2.load_intervals_dataframe()
 
 # define dates and date differences 
 ru2_start_date, ru2_end_date = ru2.date_range[0], ru2.date_range[1]
@@ -34,6 +35,8 @@ sector_market_cap = components.SectorMarketCap(index_name = index_name, index_ob
 # ######### Methods for generating index fundamentals ######### #
 # available keys: Market Cap, P/E, Dividend %
 index_fundamentals = components.IndexFundamentals(index_name = index_name, index_object = ru2).layout
+# index interval 
+index_interval = components.IntervalReturnDisplay(index_name = index_name, interval_df = ru2.intervals_data).layout
 
 # #############  	   Tabs     	############## #
 russell2000_tab = dbc.Tab([
@@ -41,7 +44,8 @@ russell2000_tab = dbc.Tab([
 		sector_return_history,
 			stock_returns, 
 				sector_market_cap, 
-					index_fundamentals 
+					index_fundamentals, 
+						index_interval
 ], label = ['RUSSELL2000'])
 
 

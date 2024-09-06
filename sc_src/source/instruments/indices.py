@@ -30,7 +30,8 @@ class Index:
     sector_long_filename_m = keys.INDEX_SECTOR_RETURN_LM 
     sector_long_filename_q = keys.INDEX_SECTOR_RETURN_LQ 
     sector_fundamentals_filename = keys.INDEX_SECTOR_FUNDAMENTALS 
-    index_fundamentals_filename = keys.INDEX_FUNDAMENTALS  
+    index_fundamentals_filename = keys.INDEX_FUNDAMENTALS 
+    index_interval_data_filename = keys.INTERVAL_FRAME  
 
     interval_keys = keys.TIME_INTERVALS_KEYS
     fundamentals_keys = ['Market Cap', 'P/E(TTM)', 'Dividend %'] 
@@ -104,7 +105,7 @@ class Index:
         """
         sorts the assets dictionary based on a fundamental key
             this fundamental key can be any of the marketCap, trailingPW or dividendYield
-        """
+        """    
         self.assets = {key:asset for key,asset in sorted(self.assets.items(), key = lambda kv: kv[1].fundamentals[sort_key])}
 
     @staticmethod 
@@ -135,10 +136,10 @@ class Index:
         """        
         init_dates = [tools.get_one_week_ago(self.latest_date), tools.get_one_month_ago(self.latest_date), 
 						tools.get_six_months_ago(self.latest_date), tools.get_one_year_ago(self.latest_date), 
-							tools.get_two_years_ago(self.latest_date)]   
+                            tools.get_two_years_ago(self.latest_date), tools.get_three_years_ago(self.latest_date), 
+                                tools.get_four_years_ago(self.latest_date), tools.get_five_years_ago(self.latest_date)]   
         self.intervals = {key:(init_date, self.latest_date) for key,init_date in zip(self.interval_keys, init_dates)}    
         
-
     def save(self):
         """
         saves the index object as a separate pkl file
@@ -208,19 +209,16 @@ class Index:
         return_key = return_prefix + 'Return'
         
         main_return_dict = {return_key:[]}
-        ticker_info_dict = {'Ticker':[], 'Sector':[], 'Name':[], 'Price_Change':[], 'Latest_Price':[]}
+        ticker_info_dict = {'Ticker':[], 'Sector':[], 'Name':[], 'Latest_Price':[]}
         for stock in self.assets.values():
             investment_return = stock.investment_return(within_dates = within_dates, 
                                 end_point = end_point, sampling = sampling, initial_investment = 0)
             if investment_return is not None:
                 main_return_dict[return_key].append(list(investment_return.values())[0])
                 if add_ticker_info:
-                    price_change = stock.price_change(within_dates = within_dates, end_point = end_point, 
-                                sampling = sampling)
                     ticker_info_dict['Ticker'].append(stock.symbol)
                     ticker_info_dict['Sector'].append(stock.sector)
                     ticker_info_dict['Name'].append(stock.name)
-                    ticker_info_dict['Price_Change'].append(price_change)
                     ticker_info_dict['Latest_Price'].append(stock.latest_price)
         if add_ticker_info:
             main_return_dict.update(ticker_info_dict)
@@ -331,7 +329,7 @@ class Index:
             start_date = self.date_range[0]
         if end_date is None:
             end_date = self.date_range[1]
-        _dates = pd.date_range(start = start_date, end = end_date, freq = freq).date 
+        _dates = pd.date_range(start = start_date, end = end_date, freq = freq).date
         mean_values = []
         for p_start, p_end in zip(_dates[:-1], _dates[1:]):
             sector_mean_return = self.sector_mean_returns(within_dates = (p_start, p_end))
@@ -412,7 +410,7 @@ class Index:
             interval_key, interval = interval_info
             if count == 0:
                 add_ticker_info = True 
-                hist_keys = [interval_key + '_Return', 'Price_Change', 'Latest_Price']
+                hist_keys = [interval_key + '_Return', 'Latest_Price']
             else:
                 add_ticker_info = False 
                 hist_keys = [interval_key + '_Return']
@@ -444,10 +442,16 @@ class Index:
         self.sector_fundamentals = _sector_fundamentals[_sector_fundamentals['Sector'].isin(keys.SECTORS)]
         self.fundamentals = pd.read_parquet(path.join(keys.LOAD_PATH, self.__class__.__name__.upper(), self.index_fundamentals_filename))
 	
-    def load_intervals_data(self):
-        pass 
-    
-    
+    def load_intervals_dataframe(self):
+        self.intervals_data = pd.read_csv(path.join(keys.LOAD_PATH, self.__class__.__name__.upper(), self.index_interval_data_filename)) 
+
+    def load_all(self):
+        self.load_assets()
+        self.load_sector_mean_returns_long()
+        self.load_fundamentals()
+        self.load_index()
+        self.load_intervals_dataframe()
+
     # ############################################################## #
 
     @classmethod 
@@ -596,8 +600,8 @@ class SP500(Index):
         creates indices and saves dataframes to files 
         """
         start_date, end_date = self.date_range 
-        self.x_index = market_data.get_sp500_yfinance(start = start_date, end = end_date)
-        self.ew_index = market_data.get_spxew_yfinance(start = start_date, end = end_date)
+        self.x_index = market_data.get_yfinance_index(index = 'SP500', start = start_date, end = end_date)
+        self.ew_index = market_data.get_yfinance_index(index = 'SP500 Equal Weight', start = start_date, end = end_date)
         self.x_index.dropna(inplace = True)
         self.ew_index.dropna(inplace = True)
         

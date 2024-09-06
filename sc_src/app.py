@@ -7,6 +7,7 @@ from source.graphs.russell3000 import russell3000_tab
 from source.graphs.russell2000 import russell2000_tab  
 from source.graphs.nasdaq import nasdaq_tab
 from source.graphs.performance import performance_tab
+from source.graphs.macro_trends import macro_trend_tab 
 
 app = dash.Dash(__name__, external_stylesheets = [dbc.themes.LUX])
 server = app.server 
@@ -19,7 +20,8 @@ app.layout = html.Div([
 					russell3000_tab,
 						russell2000_tab,  
 							nasdaq_tab,
-								performance_tab], id = 'all all tabs')
+								performance_tab, 
+									macro_trend_tab], id = 'all tabs')
 	], id = 'app layout')
 
 if __name__ == '__main__':
